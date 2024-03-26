@@ -1553,25 +1553,21 @@ class editTable extends initEdit {
                                         foreach ($value['in'] as $item_field) {
                                             $field_value = '';
 
-                                            if ( ! empty($dataset)) {
-                                                if (isset($dataset[$item_field['code']])) {
-                                                    $field_value = is_string($dataset[$item_field['code']])
-                                                        ? $dataset[$item_field['code']]
-                                                        : '';
-                                                }
+                                            if ( ! empty($dataset) && isset($dataset[$item_field['code']])) {
+                                                $field_value = is_string($dataset[$item_field['code']]) || is_numeric($dataset[$item_field['code']])
+                                                    ? $dataset[$item_field['code']]
+                                                    : '';
                                             }
 
                                             $type_name = $item_field['type'] ?? 'text';
 
-                                            if ( ! in_array($type_name, ['text','textarea', 'select', 'select2', 'date', 'datetime', 'number', 'switch', 'hidden'])) {
+                                            if ( ! in_array($type_name, ['text', 'textarea', 'select', 'select2', 'date', 'datetime', 'number', 'switch', 'hidden'])) {
                                                 $type_name = 'text';
                                             }
 
                                             if ($type_name == 'select') {
                                                 $field_value = $item_field['options'][$field_value] ?? $field_value;
 
-                                            } elseif ($type_name == 'textarea') {
-                                                $type_name = 'textarea';
                                             } elseif ($type_name == 'select2') {
                                                 $field_value = $item_field['options'][$field_value] ?? $field_value;
 
@@ -1637,13 +1633,10 @@ class editTable extends initEdit {
                                         foreach ($value['in'] as $item_field) {
                                             $field_value = '';
 
-                                            if ( ! empty($dataset)) {
-                                                if (isset($dataset[$item_field['code']])) {
-                                                    $field_value = is_string($dataset[$item_field['code']])
-                                                        ? $dataset[$item_field['code']]
-                                                        : '';
-
-                                                }
+                                            if ( ! empty($dataset) && isset($dataset[$item_field['code']])) {
+                                                $field_value = is_string($dataset[$item_field['code']]) || is_numeric($dataset[$item_field['code']])
+                                                    ? $dataset[$item_field['code']]
+                                                    : '';
                                             }
 
                                             $field_attributes = ! empty($item_field['attributes'])

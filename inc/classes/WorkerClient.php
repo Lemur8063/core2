@@ -175,6 +175,7 @@ class WorkerClient {
             'server'   => $_SERVER,
             'auth'     => is_object($auth) ? get_object_vars($auth) : $auth->getArrayCopy(),
             'payload'  => $data,
+            'doc_root'  => DOC_ROOT,
         ];
 
         if ($this->module !== 'Admin') {
