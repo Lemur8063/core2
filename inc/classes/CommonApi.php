@@ -18,6 +18,8 @@ class CommonApi extends \Core2\Acl {
 
     protected $module;
 
+    protected $route;
+
 
     /**
      * CommonApi constructor.
@@ -35,6 +37,10 @@ class CommonApi extends \Core2\Acl {
             $reg->set('invoker', $this->module);
         }
 		$this->auth = $reg->isRegistered('auth') ? $reg->get('auth') : null;
+        $this->route = $reg->isRegistered('route') ? $reg->get('route') : null;
+        if ($this->route && $this->route['query']) {
+            parse_str($this->route['query'], $this->route['query']);
+        }
 	}
 
 

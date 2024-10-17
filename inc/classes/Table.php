@@ -63,6 +63,8 @@ abstract class Table extends Acl {
     protected $is_round_calc            = false;
     protected $head_top                 = false;
 
+    private bool $is_update_state  = false;
+    private bool $is_initial_state = false;
 
     /**
      * @var SessionContainer
@@ -125,7 +127,8 @@ abstract class Table extends Acl {
         $this->session = new SessionContainer($this->resource);
 
         if ( ! isset($this->session->table)) {
-            $this->session->table = new \stdClass();
+            $this->session->table   = new \stdClass();
+            $this->is_initial_state = true;
         }
 
         // SEARCH
@@ -197,6 +200,7 @@ abstract class Table extends Acl {
         // RECORDS PER PAGE
         if (isset($_POST["count_{$this->resource}"])) {
             $this->session->table->records_per_page = abs((int)$_POST["count_{$this->resource}"]);
+            $this->is_update_state = true;
         }
 
         // COLUMNS
@@ -210,6 +214,7 @@ abstract class Table extends Acl {
                 foreach ($columns as $column) {
                     if (is_string($column)) {
                         $this->session->table->columns[$column] = true;
+                        $this->is_update_state                  = true;
                     }
                 }
             }
@@ -220,6 +225,8 @@ abstract class Table extends Acl {
             $this->records_per_page = $this->records_per_page === 0
                 ? 1000000000
                 : $this->records_per_page;
+
+            $this->is_update_state = true;
         }
 
         // ORDERING
@@ -230,23 +237,28 @@ abstract class Table extends Acl {
             if (empty($this->session->table->order)) {
                 $this->session->table->order      = $order;
                 $this->session->table->order_type = "asc";
+                $this->is_update_state            = true;
 
             } else {
                 if ($order == $this->session->table->order) {
                     if ($this->session->table->order_type == "asc") {
                         $this->session->table->order_type = "desc";
+                        $this->is_update_state            = true;
 
                     } elseif ($this->session->table->order_type == "desc") {
                         $this->session->table->order      = "";
                         $this->session->table->order_type = "";
+                        $this->is_update_state            = true;
 
                     } elseif ($this->session->table->order_type == "") {
                         $this->session->table->order_type = "asc";
+                        $this->is_update_state            = true;
                     }
 
                 } else {
                     $this->session->table->order      = $order;
                     $this->session->table->order_type = "asc";
+                    $this->is_update_state            = true;
                 }
             }
         }
@@ -339,6 +351,8 @@ abstract class Table extends Acl {
         }
 
         $this->session->table->search[$nmbr_field] = $value_field;
+
+        $this->is_update_state = true;
     }
 
 
@@ -355,6 +369,7 @@ abstract class Table extends Acl {
         }
 
         $this->session->table->filter[$nmbr_field] = $value_field;
+        $this->is_update_state = true;
     }
 
 
@@ -390,6 +405,8 @@ abstract class Table extends Acl {
     public function clearSearch() {
 
         $this->session->table->search = [];
+
+        $this->is_update_state = true;
     }
 
 
@@ -400,6 +417,8 @@ abstract class Table extends Acl {
     public function clearFilter() {
 
         $this->session->table->filter = [];
+
+        $this->is_update_state = true;
     }
 
 
@@ -726,8 +745,13 @@ abstract class Table extends Acl {
      * Получение данных по таблице
      * @return array
      * @throws Exception
+     * @throws \Zend_Db_Adapter_Exception
      */
     public function toArray(): array {
+
+        if ($this->is_update_state) {
+            $this->saveTableState();
+        }
 
         $toolbar           = [];
         $filter            = [];
@@ -991,6 +1015,28 @@ abstract class Table extends Acl {
      */
     public function preFetchRows(): void {
 
+        if ($this->is_initial_state) {
+            $table_state = $this->getTableState();
+            if ($table_state) {
+                if ( ! empty($table_state['filter'])) {
+                    $this->session->table->filter = $table_state['filter'];
+                }
+                if ( ! empty($table_state['search'])) {
+                    $this->session->table->search = $table_state['search'];
+                }
+                if ( ! empty($table_state['columns'])) {
+                    $this->session->table->columns = $table_state['columns'];
+                }
+                if ( ! empty($table_state['order']) && ! empty($table_state['order_type'])) {
+                    $this->session->table->order      = $table_state['order'];
+                    $this->session->table->order_type = $table_state['order_type'];
+                }
+                if ( ! empty($table_state['records_per_page'])) {
+                    $this->session->table->records_per_page = $table_state['records_per_page'];
+                }
+            }
+        }
+
         //TEMPLATES
         if ( ! empty($_POST['template_create_' . $this->resource])) {
             if ($profile_controller = $this->getProfileController()) {
@@ -1051,55 +1097,35 @@ abstract class Table extends Acl {
                         case self::FILTER_DATE_PERIOD:
                             $filter_value = $this->getFilters($key);
 
-                            if (empty($filter_value)) {
+                            if ( ! empty($filter_value)) {
+                                if ( ! empty($filter_value['period'])) {
+                                    $period       = explode('|', $filter_value['period']);
+                                    $period_dates = $this->getPeriodDates($period[0] ?? '', $period[1] ?: 0);
+
+                                    if ($period_dates['start'] || $period_dates['end']) {
+                                        $this->setFilter($key, [
+                                            $period_dates['start'],
+                                            $period_dates['end'],
+                                            'period' => $filter_value['period']
+                                        ]);
+                                    }
+                                }
+
+                            } else {
                                 $data = $filter_column->getData();
 
                                 if ( ! empty($data['periods']) && is_array($data['periods'])) {
                                     foreach ($data['periods'] as $period) {
                                         if ( ! empty($period['default'])) {
-                                            $period_type  = $period['type'] ?? '';
-                                            $period_count = $period['count'] ?? '';
+                                            $period_dates = $this->getPeriodDates($period['type'] ?? '', $period['count'] ?? 0);
 
-                                            $date_start = null;
-                                            $date_end   = null;
-
-                                            switch ($period_type) {
-                                                case 'days':
-                                                    if ($period_count >= 0) {
-                                                        $date_start = date('Y-m-d');
-                                                        $date_end   = date('Y-m-d', strtotime("{$period_count} days"));
-
-                                                    } else {
-                                                        $date_start = date('Y-m-d', strtotime("{$period_count} days"));
-                                                        $date_end   = date('Y-m-d');
-                                                    }
-                                                    break;
-
-                                                case 'month':
-                                                    if ($period_count > 0) {
-                                                        $date_start = date('Y-m-d');
-                                                        $date_end   = date('Y-m-t', strtotime("{$period_count} month"));
-
-                                                    } else {
-                                                        $date_start = date('Y-m-01', strtotime("{$period_count} month"));
-                                                        $date_end   = date('Y-m-d');
-                                                    }
-                                                    break;
-
-                                                case 'year':
-                                                    if ($period_count > 0) {
-                                                        $date_start = date('Y-m-d');
-                                                        $date_end   = date('Y-12-31', strtotime("{$period_count} year"));
-
-                                                    } else {
-                                                        $date_start = date('Y-01-01', strtotime("{$period_count} year"));
-                                                        $date_end   = date('Y-m-d');
-                                                    }
-                                                    break;
-                                            }
-
-                                            if ($date_start || $date_end) {
-                                                $this->setFilter($key, [$date_start, $date_end]);
+                                            if ($period_dates['start'] || $period_dates['end']) {
+                                                $count = $period['count'] ?? 0;
+                                                $this->setFilter($key, [
+                                                    $period_dates['start'],
+                                                    $period_dates['end'],
+                                                    'period' => "{$period['type']}|{$count}"
+                                                ]);
                                             }
                                         }
                                     }
@@ -1156,6 +1182,80 @@ abstract class Table extends Acl {
 
 
     /**
+     * Получение текущего состояния таблицы из базы
+     * @return array
+     * @throws Exception
+     */
+    private function getTableState(): array {
+
+        $table_state = [];
+
+        if ($profile_controller = $this->getProfileController()) {
+            $hash         = $this->getUniqueHash();
+            $profile_data = $profile_controller->getUserData("table_state_{$this->resource}_{$hash}");
+
+            if ($profile_data && is_array($profile_data)) {
+                $table_state = $profile_data;
+            }
+        }
+
+        return $table_state;
+    }
+
+
+
+    /**
+     * Сохранение текущего состояния таблицы в базу
+     * @return void
+     * @throws Exception
+     * @throws \Zend_Db_Adapter_Exception
+     */
+    private function saveTableState(): void {
+
+        if ($profile_controller = $this->getProfileController()) {
+
+            $table = [];
+
+            if (isset($this->session->table->search) &&
+                $search = $this->session->table->search
+            ) {
+                $table['search'] = $search;
+            }
+
+            if (isset($this->session->table->filter) &&
+                $filter = $this->session->table->filter
+            ) {
+                $table['filter'] = $filter;
+            }
+
+            if (isset($this->session->table->columns) &&
+                $columns = $this->session->table->columns
+            ) {
+                $table['columns'] = $columns;
+            }
+
+            if (isset($this->session->table->records_per_page) &&
+                $records_per_page = $this->session->table->records_per_page
+            ) {
+                $table['records_per_page'] = $records_per_page;
+            }
+
+            if (isset($this->session->table->order) &&
+                isset($this->session->table->order_type) &&
+                ($order      = $this->session->table->order) &&
+                ($order_type = $this->session->table->order_type)
+            ) {
+                $table['order']      = $order;
+                $table['order_type'] = $order_type;
+            }
+
+            $hash = $this->getUniqueHash();
+            $profile_controller->putUserData("table_state_{$this->resource}_{$hash}", $table);
+        }
+    }
+
+
+    /**
      * Получение хэша соответствующего текущему набору поисковых полей, колонок и имени
      * @return string
      */
@@ -1163,8 +1263,16 @@ abstract class Table extends Acl {
 
         $indicators = [];
 
-        foreach ($this->search_controls as $search) {
-            $indicators[] = $search->getType();
+        foreach ($this->search_controls as $search_control) {
+            if ($search_control instanceof Table\Search) {
+                $indicators[] = $search_control->getType();
+            }
+        }
+
+        foreach ($this->filter_controls as $filter_control) {
+            if ($filter_control instanceof Table\Filter) {
+                $indicators[] = $filter_control->getType();
+            }
         }
 
         $indicators[] = $this->columns
@@ -1172,5 +1280,57 @@ abstract class Table extends Acl {
             : 0;
 
         return hash('crc32b', $this->resource . implode('', $indicators));
+    }
+
+
+    /**
+     * @param string $period_type
+     * @param int    $period_count
+     * @return array
+     */
+    private function getPeriodDates(string $period_type, int $period_count): array {
+
+        $date_start = null;
+        $date_end   = null;
+
+        switch ($period_type) {
+            case 'days':
+                if ($period_count >= 0) {
+                    $date_start = date('Y-m-d');
+                    $date_end   = date('Y-m-d', strtotime("{$period_count} days"));
+
+                } else {
+                    $date_start = date('Y-m-d', strtotime("{$period_count} days"));
+                    $date_end   = date('Y-m-d');
+                }
+                break;
+
+            case 'month':
+                if ($period_count > 0) {
+                    $date_start = date('Y-m-d');
+                    $date_end   = date('Y-m-t', strtotime("{$period_count} month"));
+
+                } else {
+                    $date_start = date('Y-m-01', strtotime("{$period_count} month"));
+                    $date_end   = date('Y-m-d');
+                }
+                break;
+
+            case 'year':
+                if ($period_count > 0) {
+                    $date_start = date('Y-m-d');
+                    $date_end   = date('Y-12-31', strtotime("{$period_count} year"));
+
+                } else {
+                    $date_start = date('Y-01-01', strtotime("{$period_count} year"));
+                    $date_end   = date('Y-m-d');
+                }
+                break;
+        }
+
+        return [
+            'start' => $date_start,
+            'end'   => $date_end
+        ];
     }
 }
