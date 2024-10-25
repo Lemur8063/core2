@@ -43,6 +43,7 @@ class editTable extends initEdit {
 
 
     const TYPE_TEXT           = 'text';
+    const TYPE_HIDDEN         = 'hidden';
     const TYPE_NUMBER         = 'number';
     const TYPE_NUMBER_RANGE   = 'number_range';
     const TYPE_MONEY          = 'money';
