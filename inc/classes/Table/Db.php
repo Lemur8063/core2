@@ -1,12 +1,10 @@
 <?php
 namespace Core2\Classes\Table;
-use Core2\Classes\Table;
-use Laminas\Session\Container as SessionContainer;
-
 
 require_once __DIR__ . '/../Table.php';
 require_once 'Db/Select.php';
 
+use Core2\Classes\Table;
 
 
 /**
@@ -17,6 +15,7 @@ class Db extends Table {
 
     protected $table         = '';
     protected $primary_key   = '';
+
     protected $query         = '';
     protected $query_result  = '';
     protected $query_params  = '';
@@ -69,10 +68,7 @@ class Db extends Table {
         // Из class.list
         // Нужно для удаления
         if ($this->table && $this->primary_key) {
-            $sess = new SessionContainer('List');
-            $tmp              = ! empty($sess->{$this->resource}) ? $sess->{$this->resource} : [];
-            $tmp['deleteKey'] = "{$this->table}.{$this->primary_key}";
-            $sess->{$this->resource} = $tmp;
+            $this->deleteKey = "{$this->table}.{$this->primary_key}";
         }
     }
 
@@ -95,10 +91,7 @@ class Db extends Table {
         // Из class.list
         // Нужно для удаления
         if ($this->table && $this->primary_key) {
-            $sess = new SessionContainer('List');
-            $tmp              = ! empty($sess->{$this->resource}) ? $sess->{$this->resource} : [];
-            $tmp['deleteKey'] = "{$this->table}.{$this->primary_key}";
-            $sess->{$this->resource} = $tmp;
+            $this->deleteKey = "{$this->table}.{$this->primary_key}";
         }
     }
 

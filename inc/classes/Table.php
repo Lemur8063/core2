@@ -62,7 +62,7 @@ abstract class Table extends Acl {
     protected $is_ajax                  = false;
     protected $is_round_calc            = false;
     protected $head_top                 = false;
-
+    protected $deleteKey     = '';
 
     /**
      * @var SessionContainer
@@ -251,13 +251,6 @@ abstract class Table extends Acl {
             }
         }
 
-
-        // Из class.list
-        // Нужно для удаления
-        $sess = new SessionContainer('List');
-        $tmp        = ! empty($sess->{$this->resource}) ? $sess->{$this->resource} : [];
-        $tmp['loc'] = $this->is_ajax ? $_SERVER['QUERY_STRING'] . "&__{$this->resource}=ajax" : $_SERVER['QUERY_STRING'];
-        $sess->{$this->resource} = $tmp;
     }
 
 
@@ -829,7 +822,7 @@ abstract class Table extends Acl {
                 'templates'     => $this->show_templates,
                 'filters_clear' => $this->show_filters_clear,
             ],
-
+            'deleteKey'          => $this->deleteKey,
             'currency'           => $this->currency,
             'currentPage'        => $this->current_page,
             'countPages'         => $count_pages,
