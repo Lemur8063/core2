@@ -480,13 +480,32 @@ class Init extends Db {
             $this->setupSkin();
             if ($module === 'admin') {
 
-                if ($this->auth->MOBILE) {
+                if (!empty($this->auth->MOBILE)) {
                     require_once 'core2/inc/MobileController.php';
                     $core = new MobileController();
                 } else {
                     if (!empty($route['api'])) {
-                        //api для функций ядра в разработке
-                        throw new Exception(404, 404);
+                        require_once 'core2/mod/admin/ModAdminApi.php';
+                        header('Content-type: application/json; charset="utf-8"');
+                        try {
+                            $coreController = new ModAdminApi();
+                            $action = "action_" . $action;
+                            if (method_exists($coreController, $action)) {
+                                $out = $coreController->$action();
+                                if (is_array($out)) $out = json_encode($out);
+                                return $out;
+                            } else {
+                                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                            }
+                        } catch (HttpException $e) {
+                            return Error::catchJsonException([
+                                'msg' => $e->getMessage(),
+                                'code' => $e->getErrorCode()
+                            ], $e->getCode() ?: 500);
+
+                        } catch (\Exception $e) {
+                            return Error::catchJsonException($e->getMessage(), $e->getCode());
+                        }
                     }
                     require_once 'core2/inc/CoreController.php';
                     $core = new CoreController();
@@ -589,7 +608,8 @@ class Init extends Db {
                     } else {
                         throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
                     }
-                } else {
+                }
+                else {
                     return "<script>loadExt('{$mods['sm_path']}')</script>";
                 }
             }

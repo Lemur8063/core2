@@ -1428,7 +1428,9 @@ class listTable extends initList {
             if ($this->deleteURL) {
                 $tpl->delButton->assign('[delURL]', $this->deleteURL);
             } else {
-                $tpl->delButton->assign('[delURL]', "listx.del('{$this->resource}', '{$this->classText['DELETE_MSG']}', $this->ajax)");
+                $del = $this->resource;
+                if ($this->deleteKey) $del .= "." . $this->deleteKey;
+                $tpl->delButton->assign('[delURL]', "listx.del('{$del}', '{$this->classText['DELETE_MSG']}', $this->ajax)");
             }
         }
 
@@ -1510,7 +1512,6 @@ class listTable extends initList {
             $this->makeTable();
             $loc = $this->ajax ? $_SERVER['QUERY_STRING'] . "&__{$this->resource}=ajax" : $_SERVER['QUERY_STRING'];
             $this->setSessData('loc', $loc);
-            $this->setSessData('deleteKey', $this->deleteKey);
 
             echo "<script>
                 if (!listx){
