@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../inc/classes/CommonApi.php';
 
 use Core2\Error;
 use Laminas\Session\Container as SessionContainer;
+use OpenApi\Attributes as OAT;
 
 class ModAdminApi extends CommonApi
 {
@@ -23,6 +24,46 @@ class ModAdminApi extends CommonApi
      * @return array|bool|string|void|null
      * @throws Exception
      */
+    #[OAT\Delete(
+        path: '/admin/index/delete/{resource}',
+        operationId: 'deleteRecord',
+        description: 'Удаляет одну или несколько записей ресурса',
+        tags: ['Админ'],
+        parameters: [
+            new OAT\Parameter(
+                name: 'resource',
+                description: 'ижентификатор ресурса, в котором происходит удаление',
+                in: 'path',
+                required: true,
+                schema: new OAT\Schema(type: 'string')
+            )],
+        requestBody: new OAT\RequestBody(
+            required: true, description: 'ключ удаления и id удаляемых записей',
+            content: new OAT\MediaType(
+                mediaType: 'application/x-www-form-urlencoded',
+                schema: new OAT\Schema(
+                    type: 'object',
+                    required: ['key', 'id'],
+                    properties: [
+                        new OAT\Property(property: 'key', type: 'string', title: 'Ключ удаления'),
+                        new OAT\Property(property: 'id', type: 'array', title: 'id записей для удаления',
+                            items: new OAT\Items(type: 'integer')
+                        )
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'OK',
+            ),
+            new OAT\Response(
+                response: 400,
+                description: 'Ошибка удаления',
+            )
+        ]
+    )]
     private function indexDelete($data)
     {
         $params = $this->route['params'];
@@ -47,7 +88,7 @@ class ModAdminApi extends CommonApi
 
             $delete_all   = $this->checkAcl($resource, 'delete_all');
             $delete_owner = $this->checkAcl($resource, 'delete_owner');
-            if (!$delete_all && !$delete_owner) throw new RuntimeException("Доступ запрещен");
+            if (!$delete_all && !$delete_owner) throw new RuntimeException("Удаление запрещено");
             $authorOnly   = false;
             if ($delete_owner && !$delete_all) {
                 $authorOnly = true;
@@ -58,49 +99,34 @@ class ModAdminApi extends CommonApi
                 $custom = $this->customDelete($resource[0], $ids);
                 if ($custom) return $custom;
             }
-            $this->db->beginTransaction();
-            try {
-                $is = $this->db->fetchAll("EXPLAIN `$table`");
+            $is = $this->db->fetchAll("EXPLAIN `$table`");
 
-                $nodelete = false;
-                $noauthor = true;
+            $nodelete = false;
+            $noauthor = true;
 
-                foreach ($is as $value) {
-                    if ($value['Field'] == 'is_deleted_sw') {
-                        $nodelete = true;
-                    }
-                    if ($authorOnly && $value['Field'] == 'author') {
-                        $noauthor = false;
-                    }
+            foreach ($is as $value) {
+                if ($value['Field'] == 'is_deleted_sw') {
+                    $nodelete = true;
                 }
-                if ($authorOnly) {
-                    if ($noauthor) {
-                        throw new Exception($this->translate->tr("Данные не содержат признака автора!"));
-                    } else {
-                        $auth = new SessionContainer('Auth');
-                    }
+                if ($authorOnly && $value['Field'] == 'author') {
+                    $noauthor = false;
                 }
-                if ($nodelete) {
-                    foreach ($ids as $key) {
-                        $where = array($this->db->quoteInto("`$refid` = ?", $key));
-                        if ($authorOnly) {
-                            $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
-                        }
-                        $this->db->update($table, array('is_deleted_sw' => 'Y'), $where);
-                    }
+            }
+            if ($authorOnly) {
+                if ($noauthor) {
+                    throw new RuntimeException("Данные не содержат признака автора!");
                 } else {
-                    foreach ($ids as $key) {
-                        $where = array($this->db->quoteInto("`$refid` = ?", $key));
-                        if ($authorOnly) {
-                            $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
-                        }
-                        $this->db->delete($table, $where);
-                    }
+                    $auth = new SessionContainer('Auth');
                 }
-                $this->db->commit();
-            } catch (Exception $e) {
-                $this->db->rollback();
-                throw new Exception($e->getMessage());
+            }
+
+            foreach ($ids as $key) {
+                $where = array($this->db->quoteInto("`$refid` = ?", $key));
+                if ($authorOnly) {
+                    $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
+                }
+                if ($nodelete) $this->db->update($table, array('is_deleted_sw' => 'Y'), $where);
+                else $this->db->delete($table, $where);
             }
             return true;
         } catch (RuntimeException $e) {
@@ -112,6 +138,13 @@ class ModAdminApi extends CommonApi
         }
     }
 
+    /**
+     * Проверка модуля на реализацию собственного удаления
+     * @param $resource
+     * @param array $ids
+     * @return array|bool
+     * @throws Exception
+     */
     private function customDelete($resource, array $ids)
     {
         $mod = explode("_", $resource);
@@ -129,10 +162,16 @@ class ModAdminApi extends CommonApi
         return $res;
     }
 
+    /**
+     * @param $location
+     * @param $modController
+     * @return void
+     * @throws Exception
+     */
     private function requireController($location, $modController) {
         $controller_path = $location . "/" . $modController . ".php";
         if (!file_exists($controller_path)) {
-            throw new RuntimeException("Модуль не найден: " . $modController);
+            throw new Exception(sprintf($this->translate->tr("Модуль не найден: %s"), $modController), 400);
         }
         $autoload = $location . "/vendor/autoload.php";
         if (file_exists($autoload)) { //подключаем автозагрузку если есть
@@ -140,7 +179,7 @@ class ModAdminApi extends CommonApi
         }
         require_once $controller_path; // подлючаем контроллер
         if (!class_exists($modController)) {
-            throw new RuntimeException("Модуль сломан: " . $location);
+            throw new RuntimeException(sprintf($this->translate->tr("Модуль сломан: %s"), $location));
         }
     }
 }
