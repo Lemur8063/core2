@@ -96,6 +96,7 @@ class editTable extends initEdit {
     private $acl;
 
     private $tpl_control = [
+        'files'          => __DIR__ . '/../../html/' . THEME . '/html/edit/files.html',
         'xfile_upload'   => __DIR__ . '/../../html/' . THEME . '/html/edit/file_upload.html',
         'xfile_download' => __DIR__ . '/../../html/' . THEME . '/html/edit/file_download.html',
         'dataset'        => __DIR__ . '/../../html/' . THEME . '/html/edit/dataset.html',
@@ -1955,7 +1956,7 @@ class editTable extends initEdit {
                             }
 
                         }
-						elseif ($value['type'] == 'xfile' || $value['type'] == 'xfiles') {
+						elseif ($value['type'] == self::TYPE_XFILE || $value['type'] == self::TYPE_XFILES) {
 							[$module, $action] = Registry::get('context');
 							if ($this->readOnly) {
 								$files = $this->db->fetchAll("
@@ -1986,8 +1987,9 @@ class editTable extends initEdit {
 								} else {
 									$controlGroups[$cellId]['html'][$key] .= '<i>нет прикрепленных файлов</i>';
 								}
-							} else {
-                                $this->scripts['upload'] = 'xfile';
+							}
+                            else {
+                                $this->scripts['upload'] = "xfile";
                                 $this->HTML = str_replace('[_ACTION_]', 'index.php?module=admin&loc=core&action=upload', $this->HTML);
 								$params = explode("_", $value['type']);
 								$ft = '';
@@ -2028,7 +2030,7 @@ class editTable extends initEdit {
                                 $max_filesize_human = Tool::formatSizeHuman($options['maxFileSize']);
 
 								$un = $fieldId;
-                                $tpl = new \Templater3($this->tpl_control['xfile']);
+                                $tpl = new \Templater3($this->tpl_control['files']);
                                 if ($xfile == 'xfiles') {
                                     $tpl->touchBlock('xfiles');
                                     $tpl->assign("{S}", "ы");
