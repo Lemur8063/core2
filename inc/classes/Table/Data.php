@@ -1,10 +1,9 @@
 <?php
 namespace Core2\Classes\Table;
-use Core2\Classes\Table;
-
 
 require_once __DIR__ . '/../Table.php';
 
+use Core2\Classes\Table;
 
 /**
  *
