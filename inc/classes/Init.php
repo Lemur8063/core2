@@ -1068,7 +1068,10 @@ class Init extends Db {
         $tpl_menu->assign('<!--CURRENT_USER_LOGIN-->', htmlspecialchars($this->auth->NAME));
         $tpl_menu->assign('<!--CURRENT_USER_FN-->',    $this->auth->FN ? htmlspecialchars($this->auth->FN) : "");
         $tpl_menu->assign('<!--CURRENT_USER_LN-->',    $this->auth->LN ? htmlspecialchars($this->auth->LN) : "");
-        $tpl_menu->assign('[GRAVATAR_URL]',            "https://www.gravatar.com/avatar/" . md5(strtolower(trim($this->auth?->EMAIL ?? ''))));
+        $img = "https://www.gravatar.com/avatar/" . md5(strtolower(trim($this->auth?->EMAIL ?? ''))) . "?&s=28&d=mm";
+        $row = $this->dataUsersProfile->getRowByUserId($this->auth->ID);
+        if ($row && $row->avatar) $img = "data:image/png;base64, {$row->avatar}";
+        $tpl_menu->assign('[GRAVATAR_URL]', $img);
 
 
         $modules_js     = [];
