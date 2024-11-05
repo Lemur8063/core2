@@ -653,7 +653,7 @@ class ajaxFunc extends Common {
                 }
 
 
-                if ( ! empty($control)) {
+                if ($row && ! empty($control)) {
                     $row->setFromArray($control);
                     $row->save();
                 }
