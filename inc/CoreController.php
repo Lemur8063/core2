@@ -757,9 +757,6 @@ class CoreController extends Common implements File {
                     if ( ! empty($error['url']) && is_string($error['url']) && mb_strlen($error['url']) > 255) {
                         $error['url'] = mb_substr($error['url'], 0, 255);
                     }
-                    if ( ! empty($error['time']) && is_string($error['time']) && mb_strlen($error['time']) > 19) {
-                        $error['time'] = mb_substr($error['time'], 0, 19);
-                    }
                     if ( ! empty($error['type']) && is_string($error['type']) && mb_strlen($error['type']) > 100) {
                         $error['type'] = mb_substr($error['type'], 0, 100);
                     }
@@ -777,7 +774,6 @@ class CoreController extends Common implements File {
 
                     $this->log->file($this->config?->log?->error_front?->file)->{$level}($error_type, [
                         'login'  => $this->auth->NAME,
-                        'time'   => $error['time'] ?? null,
                         'url'    => $error['url'] ?? null,
                         'error'  => $error['error'] ?? null,
                         'client' => $error['client'] ?? null,
