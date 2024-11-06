@@ -132,7 +132,7 @@ class WorkerClient {
 
         if (!$workload) return false; //TODO log me
 
-        $jh = $this->client->doBackground($worker, $workload, $unique);
+        $jh = $this->client->doBackground($worker, json_encode($workload), $unique);
 
         if ( ! defined("GEARMAN_SUCCESS") || $this->client->returnCode() != GEARMAN_SUCCESS) {
             (new Log())->error("Job server return " . $this->client->returnCode());
@@ -154,7 +154,9 @@ class WorkerClient {
         $workload = $this->getWorkload($worker, $data);
         $worker   = $this->getWorkerName($worker);
 
-        $jh = $this->client->doHighBackground($worker, $workload, $unique);
+        if (!$workload) return false; //TODO log me
+
+        $jh = $this->client->doHighBackground($worker, json_encode($workload), $unique);
 
         if ( ! defined("GEARMAN_SUCCESS") || $this->client->returnCode() != GEARMAN_SUCCESS) {
             (new Log())->error("Job server return " . $this->client->returnCode());
@@ -171,7 +173,7 @@ class WorkerClient {
      * @param $data
      * @return false|string
      */
-    private function getWorkload($worker, $data) {
+    private function getWorkload($worker, $data): array {
 
         $auth = Registry::get('auth');
         $dt   = new \DateTime();
@@ -194,7 +196,7 @@ class WorkerClient {
                 'worker'    => $worker
             ]);
         }
-        return json_encode($workload);
+        return $workload;
     }
 
     public function jobStatus($job_handle) {

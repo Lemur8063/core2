@@ -75,7 +75,7 @@ class ModAdminApi extends CommonApi
             [$table, $refid] = explode(".", $data['key']);
 
             if ( ! $table || ! $refid) {
-                throw new RuntimeException("Не удалось определить параметры удаления");
+                throw new RuntimeException("Не удалось определить параметры удаления!");
             }
             $resource   = $params['delete'];
             $ids        = $data['id'];
@@ -86,18 +86,19 @@ class ModAdminApi extends CommonApi
                 $admin = true;
             }
 
+            if (!$admin) {
+//                $resource = explode('xxx', $resource);
+                //кастомное удаление само должно проверять права на удаление
+                $custom = $this->customDelete($resource, $ids);
+                if ($custom) return $custom;
+            }
+
             $delete_all   = $this->checkAcl($resource, 'delete_all');
             $delete_owner = $this->checkAcl($resource, 'delete_owner');
             if (!$delete_all && !$delete_owner) throw new RuntimeException("Удаление запрещено");
             $authorOnly   = false;
             if ($delete_owner && !$delete_all) {
                 $authorOnly = true;
-            }
-
-            if (!$admin) {
-                $resource = explode('xxx', $resource);
-                $custom = $this->customDelete($resource[0], $ids);
-                if ($custom) return $custom;
             }
             $is = $this->db->fetchAll("EXPLAIN `$table`");
 
