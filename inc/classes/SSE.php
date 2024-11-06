@@ -83,6 +83,7 @@ class SSE extends \Common {
         foreach ($this->_events as $path => $event) {
             try {
                 if ($event->check()) {
+
                     //TODO реализовать не блокирующий вызов
                     $path = str_replace("\\", "-", $path);
 
@@ -110,7 +111,7 @@ class SSE extends \Common {
                     }
                 }
             } catch (\Exception $e) {
-
+                //echo $e->getMessage();
             }
         }
         if ($this->db->isConnected()) $this->db->closeConnection();
