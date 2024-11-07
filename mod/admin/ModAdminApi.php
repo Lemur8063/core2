@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../inc/classes/CommonApi.php';
 use Core2\Error;
 use Laminas\Session\Container as SessionContainer;
 use OpenApi\Attributes as OAT;
+use Core2\Switches;
 
 class ModAdminApi extends CommonApi
 {
@@ -13,6 +14,11 @@ class ModAdminApi extends CommonApi
         switch ($_SERVER['REQUEST_METHOD']) {
             case 'DELETE':
                 return $this->indexDelete($this->getInputBody());
+                break;
+            case 'POST':
+                if (!empty($params['switch'])) {
+                    return $this->indexSwitch($params['switch'], $this->getInputBody());
+                }
                 break;
             default:
                 throw new \Exception('Error: method not handled', 405);
@@ -182,5 +188,121 @@ class ModAdminApi extends CommonApi
         if (!class_exists($modController)) {
             throw new RuntimeException(sprintf($this->translate->tr("Модуль сломан: %s"), $location));
         }
+    }
+
+    #[OAT\Post(
+        path: '/admin/index/switch/{resource}',
+        operationId: 'switchRecord',
+        description: 'Переключает признак активности записи',
+        tags: ['Админ'],
+        parameters: [
+            new OAT\Parameter(
+                name: 'resource',
+                description: 'ижентификатор ресурса, в котором происходит переключение',
+                in: 'path',
+                required: true,
+                schema: new OAT\Schema(type: 'string')
+            )],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            description: 'данные для переключения',
+            content: new OAT\MediaType(
+                mediaType: 'application/x-www-form-urlencoded',
+                schema: new OAT\Schema(
+                    type: 'object',
+                    required: ['data', 'is_active', 'value'],
+                    properties: [
+                        new OAT\Property(property: 'data', type: 'string', title: 'поле базы данных с признаком для переключения'),
+                        new OAT\Property(property: 'is_active', type: 'string', title: 'хначение переключателя'),
+                        new OAT\Property(property: 'value', type: 'string', title: 'id записи, для которой происходит переключение')
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'OK',
+            ),
+            new OAT\Response(
+                response: 400,
+                description: 'Ошибка удаления',
+            )
+        ]
+    )]
+    private function indexSwitch($resource, $data)
+    {
+
+        [$table, $refid, $id] = explode(".", $data['data']);
+        $admin      = false;
+        if (strpos($table, 'core_') === 0) {
+            //таблица ядра
+            if (!$this->auth->ADMIN) throw new RuntimeException("Доступ запрещен");
+            $admin = true;
+        }
+
+        if (!$admin) {
+            $custom = $this->customSwitch($resource, $data['data'], $data['value'], $data['is_active']);
+            if ($custom) {
+                if ($custom === true) return ['status' => "ok"];
+                return $custom;
+            }
+        }
+
+        try {
+            if ( ! isset($_POST['data'])) {
+                throw new Exception($this->translate->tr('Произошла ошибка! Не удалось получить данные'));
+            }
+
+            preg_match('/[a-z|A-Z|0-9|_|-]+/', trim($table), $arr);
+            $table_name = $arr[0];
+            $is_active = $refid;
+            if (!$id && !empty($data['value'])) {
+                $id = (int) $data['value'];
+            }
+            $keys_list = $this->db->fetchRow("SELECT * FROM `{$table_name}` LIMIT 1");
+            $keys = array_keys($keys_list);
+            $key = $keys[0];
+            $where = $this->db->quoteInto($key . "= ?", $id);
+            $this->db->update($table_name, array($is_active => $data['is_active']), $where);
+            //очистка кеша активности по всем записям таблицы
+            // используется для core_modules
+            $this->cache->clearByTags(["is_active_" . $table_name]);
+
+            return ['status' => "ok"];
+        } catch (Exception $e) {
+            return ['status' => $e->getMessage()];
+        }
+    }
+
+    /**
+     *
+     * @param $resource
+     * @param $table_field
+     * @param $refid
+     * @param $value
+     * @return array|bool
+     * @throws Exception
+     */
+    private function customSwitch($resource, $table_field, $refid, $value)
+    {
+        $mod = explode("_", $resource);
+        $location      = $this->getModuleLocation($mod[0]);
+        $modController = "Mod" . ucfirst(strtolower($mod[0])) . "Controller";
+
+        $this->requireController($location, $modController);
+        $controller = new $modController();
+
+        if ($controller instanceof Switches) {
+            try {
+                ob_start();
+                $result = $controller->action_switch($resource, $table_field, $refid, $value);
+                ob_clean();
+            } catch (\Exception $e) {
+                $result = [ 'status' => $e->getMessage() ];
+            }
+            return $result;
+        }
+        return false;
     }
 }
