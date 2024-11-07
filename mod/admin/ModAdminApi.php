@@ -226,7 +226,7 @@ class ModAdminApi extends CommonApi
             ),
             new OAT\Response(
                 response: 400,
-                description: 'Ошибка удаления',
+                description: 'Ошибка переключения',
             )
         ]
     )]

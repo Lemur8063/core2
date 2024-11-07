@@ -449,30 +449,30 @@ class CoreController extends Common implements File {
 		$view  = new Admin\Users\View();
         $panel = new Panel();
 
-        ob_start();
+        $content = '';
 
         try {
             if (isset($_GET['edit'])) {
                 if (empty($_GET['edit'])) {
                     $panel->setTitle($this->_("Создание нового пользователя"), '', $app);
-                    echo $view->getEdit($app);
+                    $content = $view->getEdit($app);
                 } else {
                     $user = new Admin\Users\User($_GET['edit']);
                     $panel->setTitle($user->u_login, $this->_('Редактирование пользователя'), $app);
-                    echo $view->getEdit($app, $user);
+                    $content = $view->getEdit($app, $user);
                 }
 
 
             } else {
                 $panel->setTitle($this->_("Справочник пользователей системы"));
-                echo $view->getList($app);
+                $content = $view->getList($app);
             }
 
         } catch (\Exception $e) {
-            echo Alert::danger($e->getMessage(), 'Ошибка');
+            $content = Alert::danger($e->getMessage(), 'Ошибка');
         }
 
-        $panel->setContent(ob_get_clean());
+        $panel->setContent($content);
         return $panel->render();
 	}
 
@@ -800,7 +800,7 @@ class CoreController extends Common implements File {
 		$co = count($res);
 		if ($co > 1) {
 			$ip = array();
-			foreach ($res as $k => $value) {
+			foreach ($res as $value) {
 				if ($value['sid'] == session_id()) continue;
 				$ip[] = $value['ip'];
 			}
