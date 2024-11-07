@@ -233,26 +233,28 @@ class ModAdminApi extends CommonApi
     private function indexSwitch($resource, $data)
     {
 
-        [$table, $refid, $id] = explode(".", $data['data']);
-        $admin      = false;
-        if (strpos($table, 'core_') === 0) {
-            //таблица ядра
-            if (!$this->auth->ADMIN) throw new RuntimeException("Доступ запрещен");
-            $admin = true;
-        }
-
-        if (!$admin) {
-            $custom = $this->customSwitch($resource, $data['data'], $data['value'], $data['is_active']);
-            if ($custom) {
-                if ($custom === true) return ['status' => "ok"];
-                return $custom;
-            }
-        }
-
         try {
-            if ( ! isset($_POST['data'])) {
-                throw new Exception($this->translate->tr('Произошла ошибка! Не удалось получить данные'));
+            if (empty($data['data']) || empty($data['value']) || empty($data['is_active'])) {
+                throw new RuntimeException("Не хватает данных для переключения");
             }
+            [$table, $refid, $id] = explode(".", $data['data']);
+            $admin      = false;
+            if (strpos($table, 'core_') === 0) {
+                //таблица ядра
+                if (!$this->auth->ADMIN) throw new RuntimeException("Доступ запрещен");
+                $admin = true;
+            }
+
+
+            if (!$admin) {
+                $custom = $this->customSwitch($resource, $data['data'], $data['value'], $data['is_active']);
+                if ($custom) {
+                    if ($custom === true) return ['status' => "ok"];
+                    return $custom;
+                }
+            }
+
+
 
             preg_match('/[a-z|A-Z|0-9|_|-]+/', trim($table), $arr);
             $table_name = $arr[0];
@@ -270,6 +272,8 @@ class ModAdminApi extends CommonApi
             $this->cache->clearByTags(["is_active_" . $table_name]);
 
             return ['status' => "ok"];
+        } catch (RuntimeException $e) {
+            throw new Exception($this->translate->tr($e->getMessage()), 400);
         } catch (Exception $e) {
             return ['status' => $e->getMessage()];
         }
