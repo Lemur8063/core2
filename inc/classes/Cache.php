@@ -58,12 +58,12 @@ class Cache
      * @return void
      */
     public function setTags($key, $tags) {
-        if (method_exists($this->adapter,'setTags')) return $this->adapter->setTags($key, $tags);
+        if (method_exists($this->adapter, 'setTags')) return $this->adapter->setTags($key, $tags);
         //TODO сделать тэгирование
     }
 
     public function clearByTags($tags) {
-        if (method_exists($this->adapter,'clearByTags')) $this->adapter->clearByTags($tags);
+        if (method_exists($this->adapter, 'clearByTags')) $this->adapter->clearByTags($tags);
         else {
             //TODO сделать очистку по тэгам
             $this->adapter->clearByNamespace($this->namespace);
@@ -118,5 +118,13 @@ class Cache
      */
     public function getAdapterName(): string {
         return (string)$this->adapter_name;
+    }
+
+    /**
+     * @param $prefix
+     * @return void
+     */
+    public function clearByPrefix($prefix): void {
+        $this->adapter->clearByPrefix($prefix);
     }
 }

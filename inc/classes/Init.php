@@ -460,8 +460,6 @@ class Init extends Db {
         }
         else {
 
-            if ($this->switchAction()) return '';
-
             $module = !empty($route['api']) ? $route['api'] : $route['module'];
             $extension = strrpos($module, '.') ? substr($module, strrpos($module, '.')) : null;
             if ($extension) $module = substr($module, 0, strrpos($module, '.'));
@@ -932,82 +930,6 @@ class Init extends Db {
         ];
     }
 
-
-
-    /**
-     * Метод выполнения переключений полей в таблицах (Y/N)
-     * @return bool
-     * @throws Exception
-     */
-    private function switchAction(): bool {
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return false;
-        }
-
-        parse_str($_SERVER['QUERY_STRING'], $params);
-
-        if ( ! empty($params['module']) &&
-             ! empty($params['action']) &&
-             ! empty($params['loc']) &&
-             ! empty($params['resource']) &&
-             ! empty($_POST['data']) &&
-             ! empty($_POST['is_active']) &&
-             ! empty($_POST['value']) &&
-            $params['module'] == 'admin' &&
-            $params['action'] == 'switch' &&
-            $params['loc'] == 'core'
-        ) {
-
-            $sess     = new SessionContainer('List');
-            $sessData = $sess->{$params['resource']};
-            $loc      = $sessData['loc'] ?? '';
-
-            if ( ! $loc) {
-                throw new Exception($this->translate->tr("Не удалось определить местоположение данных."), 13);
-            }
-
-            parse_str($loc, $location_params);
-            $this->setContext($location_params['module']);
-
-            if ($location_params['module'] !== 'admin') {
-                $module        = $location_params['module'];
-                $location      = $this->getModuleLocation($module);
-                $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
-
-                $this->requireController($location, $modController);
-
-                $controller = new $modController();
-
-                if ($controller instanceof \Core2\Switches) {
-                    try {
-                        ob_start();
-                        $result = $controller->action_switch($params['resource'], $_POST['data'], $_POST['value'], $_POST['is_active']);
-                        ob_clean();
-                    } catch (\Exception $e) {
-                        $result = [ 'status' => $e->getMessage() ];
-                    }
-
-                    if ($result) {
-                        header('Content-type: application/json; charset="utf-8"');
-                        echo json_encode($result === true ? ['status' => "ok"] : $result);
-
-                        return true;
-                    }
-                }
-            }
-
-            require_once 'core2/inc/CoreController.php';
-            $core = new CoreController();
-
-            header('Content-type: application/json; charset="utf-8"');
-            $core->action_switch();
-
-            return true;
-        }
-
-        return false;
-    }
 
 
     /**
