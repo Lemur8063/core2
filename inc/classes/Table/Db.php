@@ -874,8 +874,7 @@ class Db extends Table {
                 if (!($this->cache->hasItem($cache_key))) {
                     $result = $db->fetchAll($select_sql, $this->query_params);
                     $this->records_total = $db->fetchOne("SELECT FOUND_ROWS()");
-                    $result = ['data' => $result, 'records_total' => $this->records_total];
-                    $this->cache->setItem($cache_key, $result);
+                    $this->cache->setItem($cache_key, ['data' => $result, 'records_total' => $this->records_total]);
                 } else {
                     $result = $this->cache->getItem($cache_key);
                     $this->records_total = $result['records_total'];
@@ -981,6 +980,11 @@ class Db extends Table {
         return $search_value;
     }
 
+    /**
+     * будут ли кешироваться данные таблицы
+     * @param bool $is
+     * @return void
+     */
     public function setCachable(bool $is = true): void
     {
         $this->cachable = $is;
