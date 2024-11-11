@@ -1333,7 +1333,7 @@ class listTable extends initList {
                     } elseif ($value['type'] == 'status_inline') {
                         $evt = "";
                         if ($this->checkAcl($this->resource, 'edit_owner') || $this->checkAcl($this->resource, 'edit_all')) {
-                            $evt = "onclick=\"listx.switch_active(this, event)\" t_name=\"{$value['in']}\" val=\"{$row[0]}\" title=\"{$this->classText['SWITCH']}\"";
+                            $evt = "onclick=\"listx.switch_active(this, event)\" data-resource=\"{$this->resource}.{$value['in']}\" val=\"{$row[0]}\" title=\"{$this->classText['SWITCH']}\"";
                         }
                         if ($sql_value == 1 || $sql_value == 'Y' || $sql_value == '[ON]') {
                             $tableBodyHTML .= "<img src=\"core2/html/" . THEME . "/img/on.png\" alt=\"on\" $evt/>";
@@ -1428,7 +1428,9 @@ class listTable extends initList {
             if ($this->deleteURL) {
                 $tpl->delButton->assign('[delURL]', $this->deleteURL);
             } else {
-                $tpl->delButton->assign('[delURL]', "listx.del('{$this->resource}', '{$this->classText['DELETE_MSG']}', $this->ajax)");
+                $del = $this->resource;
+                if ($this->deleteKey) $del .= "." . $this->deleteKey;
+                $tpl->delButton->assign('[delURL]', "listx.del('{$del}', '{$this->classText['DELETE_MSG']}', $this->ajax)");
             }
         }
 
@@ -1509,8 +1511,6 @@ class listTable extends initList {
         if ($this->checkAcl($this->resource, 'list_all') || $this->checkAcl($this->resource, 'list_owner')) {
             $this->makeTable();
             $loc = $this->ajax ? $_SERVER['QUERY_STRING'] . "&__{$this->resource}=ajax" : $_SERVER['QUERY_STRING'];
-            $this->setSessData('loc', $loc);
-            $this->setSessData('deleteKey', $this->deleteKey);
 
             echo "<script>
                 if (!listx){

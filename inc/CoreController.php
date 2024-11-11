@@ -336,137 +336,6 @@ class CoreController extends Common implements File {
 	}
 
 
-	/**
-     * Переключатель признака активности записи
-	 * @throws Exception
-     * @return void
-	 */
-	public function action_switch() {
-
-		try {
-            if ( ! isset($_POST['data'])) {
-                throw new Exception($this->translate->tr('Произошла ошибка! Не удалось получить данные'));
-            }
-
-			$res = explode('.', $_POST['data']);
-
-			preg_match('/[a-z|A-Z|0-9|_|-]+/', trim($res[0]), $arr);
-			$table_name = $arr[0];
-			$is_active = $res[1];
-			$id = isset($res[2]) ? $res[2] : 0;
-			if (!$id && !empty($_POST['value'])) {
-				$id = (int) $_POST['value'];
-			}
-			$status = $_POST['is_active'];
-			$keys_list = $this->db->fetchRow("SELECT * FROM `{$table_name}` LIMIT 1");
-			$keys = array_keys($keys_list);
-			$key = $keys[0];
-			$where = $this->db->quoteInto($key . "= ?", $id);
-			$this->db->update($table_name, array($is_active => $status), $where);
-			//очистка кеша активности по всем записям таблицы
-			// используется для core_modules
-			$this->cache->clearByTags(["is_active_" . $table_name]);
-
-			echo json_encode(array('status' => "ok"));
-		} catch (Exception $e) {
-			echo json_encode(array('status' => $e->getMessage()));
-		}	
-	}
-
-	/**
-	 * Занимается удалением записей в таблицах базы данных
-	 * если в талице есть поле is_deleted_sw, то запись не удаляется, а поле is_deleted_sw принимает значение 'Y'
-	 *
-	 * @param array $params
-	 *
-	 * @return bool
-	 * @throws Exception
-	 */
-    public function action_delete(array $params)
-    {
-        $resource = $params['res'];
-
-        if ( ! $resource) {
-            throw new Exception($this->translate->tr("Не удалось определить идентификатор ресурса"), 13);
-        }
-
-        if ( ! $params['id']) {
-            throw new Exception($this->translate->tr("Нет данных для удаления"), 13);
-        }
-
-        $sess      = new SessionContainer('List');
-        $sessData  = $sess->$resource;
-        $deleteKey = $sessData['deleteKey'];
-        $ids       = explode(",", $params['id']);
-
-        if ( ! $deleteKey) {
-            throw new Exception($this->translate->tr("Не удалось определить параметры удаления"), 13);
-        }
-
-        [$table, $refid] = explode(".", $deleteKey);
-
-        if ( ! $table || ! $refid) {
-            throw new Exception($this->translate->tr("Не удалось определить параметры удаления"), 13);
-        }
-
-        // TODO В случае, когда нужно удалить что-то на главной странице - это нельзя будет сделать, так как у обычного юзера нет доступа к модулю админ
-
-        if (($this->checkAcl($resource, 'delete_all') || $this->checkAcl($resource, 'delete_owner'))) {
-            $authorOnly = false;
-            if ($this->checkAcl($resource, 'delete_owner') && ! $this->checkAcl($resource, 'delete_all')) {
-                $authorOnly = true;
-            }
-            $this->db->beginTransaction();
-            try {
-                $is = $this->db->fetchAll("EXPLAIN `$table`");
-
-                $nodelete = false;
-                $noauthor = true;
-
-                foreach ($is as $value) {
-                    if ($value['Field'] == 'is_deleted_sw') {
-                        $nodelete = true;
-                    }
-                    if ($authorOnly && $value['Field'] == 'author') {
-                        $noauthor = false;
-                    }
-                }
-                if ($authorOnly) {
-                    if ($noauthor) {
-                        throw new \Exception($this->translate->tr("Данные не содержат признака автора!"));
-                    } else {
-                        $auth = new SessionContainer('Auth');
-                    }
-                }
-                if ($nodelete) {
-                    foreach ($ids as $key) {
-                        $where = array($this->db->quoteInto("`$refid` = ?", $key));
-                        if ($authorOnly) {
-                            $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
-                        }
-                        $this->db->update($table, array('is_deleted_sw' => 'Y'), $where);
-                    }
-                } else {
-                    foreach ($ids as $key) {
-                        $where = array($this->db->quoteInto("`$refid` = ?", $key));
-                        if ($authorOnly) {
-                            $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
-                        }
-                        $this->db->delete($table, $where);
-                    }
-                }
-                $this->db->commit();
-            } catch (Exception $e) {
-                $this->db->rollback();
-                throw new \Exception($e->getMessage(), 13);
-            }
-        } else {
-            throw new \Exception(911, 13);
-        }
-        return true;
-    }
-
-
     /**
      * Обновление последовательности записей
      * @return string
@@ -580,30 +449,30 @@ class CoreController extends Common implements File {
 		$view  = new Admin\Users\View();
         $panel = new Panel();
 
-        ob_start();
+        $content = '';
 
         try {
             if (isset($_GET['edit'])) {
                 if (empty($_GET['edit'])) {
                     $panel->setTitle($this->_("Создание нового пользователя"), '', $app);
-                    echo $view->getEdit($app);
+                    $content = $view->getEdit($app);
                 } else {
                     $user = new Admin\Users\User($_GET['edit']);
                     $panel->setTitle($user->u_login, $this->_('Редактирование пользователя'), $app);
-                    echo $view->getEdit($app, $user);
+                    $content = $view->getEdit($app, $user);
                 }
 
 
             } else {
                 $panel->setTitle($this->_("Справочник пользователей системы"));
-                echo $view->getList($app);
+                $content = $view->getList($app);
             }
 
         } catch (\Exception $e) {
-            echo Alert::danger($e->getMessage(), 'Ошибка');
+            $content = Alert::danger($e->getMessage(), 'Ошибка');
         }
 
-        $panel->setContent(ob_get_clean());
+        $panel->setContent($content);
         return $panel->render();
 	}
 
@@ -931,7 +800,7 @@ class CoreController extends Common implements File {
 		$co = count($res);
 		if ($co > 1) {
 			$ip = array();
-			foreach ($res as $k => $value) {
+			foreach ($res as $value) {
 				if ($value['sid'] == session_id()) continue;
 				$ip[] = $value['ip'];
 			}

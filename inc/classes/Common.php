@@ -356,10 +356,9 @@ class Common extends \Core2\Acl {
      */
 	protected function emit($event_name, $data = [], $module_override = '') {
         $module = $module_override ?: $this->module;
-	    if (!in_array($module, $this->emitents)) $this->emitents[$module] = new Emitter($this, $module);
-        $em = $this->emitents[$module];
-        $em->addEvent($event_name, $data);
-        return $em->emit();
+        $reg    = Registry::getInstance();
+        $em     = $reg->isRegistered('emitter') ? $reg->get('emitter') : new Emitter();
+        return $em->emit($module, $event_name, $data);
     }
 
 

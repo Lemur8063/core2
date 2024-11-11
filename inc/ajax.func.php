@@ -477,7 +477,7 @@ class ajaxFunc extends Common {
 						foreach ($fileFlagDel as $value) {
 							$value = explode(",", $value);
 							$ids = array();
-							foreach ($value as $k => $inid) {
+							foreach ($value as $inid) {
 								$inid = (int)$inid;
 								if ($inid) $ids[] = $inid;
 							}

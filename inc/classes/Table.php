@@ -62,6 +62,7 @@ abstract class Table extends Acl {
     protected $is_ajax                  = false;
     protected $is_round_calc            = false;
     protected $head_top                 = false;
+    protected $deleteKey     = '';
 
     private bool $is_update_state  = false;
     private bool $is_initial_state = false;
@@ -263,13 +264,6 @@ abstract class Table extends Acl {
             }
         }
 
-
-        // Из class.list
-        // Нужно для удаления
-        $sess = new SessionContainer('List');
-        $tmp        = ! empty($sess->{$this->resource}) ? $sess->{$this->resource} : [];
-        $tmp['loc'] = $this->is_ajax ? $_SERVER['QUERY_STRING'] . "&__{$this->resource}=ajax" : $_SERVER['QUERY_STRING'];
-        $sess->{$this->resource} = $tmp;
     }
 
 
@@ -853,7 +847,7 @@ abstract class Table extends Acl {
                 'templates'     => $this->show_templates,
                 'filters_clear' => $this->show_filters_clear,
             ],
-
+            'deleteKey'          => $this->deleteKey,
             'currency'           => $this->currency,
             'currentPage'        => $this->current_page,
             'countPages'         => $count_pages,
@@ -1210,7 +1204,7 @@ abstract class Table extends Acl {
      * @throws Exception
      * @throws \Zend_Db_Adapter_Exception
      */
-    private function saveTableState(): void {
+    protected function saveTableState(): void {
 
         if ($profile_controller = $this->getProfileController()) {
 

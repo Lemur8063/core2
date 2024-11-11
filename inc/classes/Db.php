@@ -539,7 +539,7 @@ class Db {
 
 
 	/**
-     * Получаем структуру конкретного справочника
+     * Получаем структуру конкретного справочника или его значения
 	 * @param int $id
 	 * @return array
 	 */
@@ -652,6 +652,7 @@ class Db {
 	final public function isModuleInstalled($module_id) {
         $this->getAllModules();
         $module_id = trim(strtolower($module_id));
+        if (!Registry::isRegistered("_modules")) return [];
         $is = isset(Registry::get("_modules")[$module_id]) ? Registry::get("_modules")[$module_id] : [];
         return $is;
 	}
@@ -667,7 +668,7 @@ class Db {
 	final public function getModuleLocation($module_id) {
         $module_id = strtolower($module_id);
         $this->getAllModules();
-
+        if (!Registry::isRegistered("_modules")) return false;
         $mod = Registry::get("_modules")[$module_id] ?? null;
         if (!$mod) return false;
         if ($mod['is_system'] === "Y") {
@@ -687,6 +688,7 @@ class Db {
 	 */
 	final public function getModuleVersion($module_id) {
         $this->getAllModules();
+        if (!Registry::isRegistered("_modules")) return '';
         $version = isset(Registry::get("_modules")[$module_id]) ? Registry::get("_modules")[$module_id]['version'] : '';
 		return $version;
 	}
@@ -842,7 +844,9 @@ class Db {
             require_once(__DIR__ . "/../../mod/admin/Model/Modules.php");
             require_once(__DIR__ . "/../../mod/admin/Model/SubModules.php");
             $config = $reg->get('config');
+            if (!$config->database) return;
             $db = $this->establishConnection($config->database);
+            if (!($db instanceof \Zend_Db_Adapter_Abstract)) return;
             \Zend_Db_Table::setDefaultAdapter($db);
             $reg->set('db|admin', $db);
 

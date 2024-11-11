@@ -79,6 +79,9 @@ class OpenApiSpec extends Db
                 $this->_apis[$data['module_id']] = $location . "/$controller.php";
             }
         }
+        $admin = 'core2/mod/admin/ModAdminApi.php';
+        require_once $admin;
+        $this->_apis[] = $admin;
         define("SERVER", (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['SERVER_NAME'] . DOC_PATH);
     }
 

@@ -30,4 +30,10 @@ class UsersProfile extends \Zend_Db_Table_Abstract {
         return $dataUser;
     }
 
+    public function getRowByUserId(int $user_id): ?\Zend_Db_Table_Row {
+
+        $select = $this->select()->where("user_id = ?", $user_id);
+
+        return $this->fetchRow($select);
+    }
 }

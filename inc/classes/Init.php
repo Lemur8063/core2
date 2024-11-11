@@ -116,7 +116,7 @@ try {
         $config->merge($conf->readIni($conf_d, $section));
     }
 
-    if (empty($_SERVER['HTTPS'])) {
+    if (empty($_SERVER['HTTPS']) && PHP_SAPI !== 'cli') {
         if (isset($config->system) && ! empty($config->system->https)) {
             header('Location: https://' . $_SERVER['SERVER_NAME']);
             exit();
@@ -460,9 +460,6 @@ class Init extends Db {
         }
         else {
 
-            if ($this->deleteAction()) return '';
-            if ($this->switchAction()) return '';
-
             $module = !empty($route['api']) ? $route['api'] : $route['module'];
             $extension = strrpos($module, '.') ? substr($module, strrpos($module, '.')) : null;
             if ($extension) $module = substr($module, 0, strrpos($module, '.'));
@@ -480,13 +477,32 @@ class Init extends Db {
             $this->setupSkin();
             if ($module === 'admin') {
 
-                if ($this->auth->MOBILE) {
+                if (!empty($this->auth->MOBILE)) {
                     require_once 'core2/inc/MobileController.php';
                     $core = new MobileController();
                 } else {
                     if (!empty($route['api'])) {
-                        //api для функций ядра в разработке
-                        throw new Exception(404, 404);
+                        require_once 'core2/mod/admin/ModAdminApi.php';
+                        header('Content-type: application/json; charset="utf-8"');
+                        try {
+                            $coreController = new ModAdminApi();
+                            $action = "action_" . $action;
+                            if (method_exists($coreController, $action)) {
+                                $out = $coreController->$action();
+                                if (is_array($out)) $out = json_encode($out);
+                                return $out;
+                            } else {
+                                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                            }
+                        } catch (HttpException $e) {
+                            return Error::catchJsonException([
+                                'msg' => $e->getMessage(),
+                                'code' => $e->getErrorCode()
+                            ], $e->getCode() ?: 500);
+
+                        } catch (\Exception $e) {
+                            return Error::catchJsonException($e->getMessage(), $e->getCode());
+                        }
                     }
                     require_once 'core2/inc/CoreController.php';
                     $core = new CoreController();
@@ -589,7 +605,8 @@ class Init extends Db {
                     } else {
                         throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
                     }
-                } else {
+                }
+                else {
                     return "<script>loadExt('{$mods['sm_path']}')</script>";
                 }
             }
@@ -913,139 +930,6 @@ class Init extends Db {
         ];
     }
 
-    /**
-     * Проверка удаления с последующей переадресацией
-     * Если запрос на удаление корректен, всегда должно возвращать true
-     *
-     * @return bool
-     * @throws Exception
-     */
-    private function deleteAction() {
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'DELETE') {
-            return false;
-        }
-
-        parse_str($_SERVER['QUERY_STRING'], $params);
-
-        if ( ! empty($params['res']) && ! empty($params['id'])) {
-            header('Content-type: application/json; charset="utf-8"');
-            $sess     = new SessionContainer('List');
-            $resource = $params['res'];
-            $sessData = $sess->$resource;
-            $loc      = isset($sessData['loc']) ? $sessData['loc'] : '';
-
-            if ( ! $loc) {
-                throw new Exception($this->translate->tr("Не удалось определить местоположение данных."), 13);
-            }
-
-            parse_str($loc, $temp);
-            $this->setContext($temp['module']);
-
-            if ($temp['module'] !== 'admin') {
-                $module        = $temp['module'];
-                $location      = $this->getModuleLocation($module); //определяем местоположение модуля
-                $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
-                $this->requireController($location, $modController);
-                $modController = new $modController();
-
-                if ($modController instanceof Delete) {
-                    ob_start();
-                    $res = $modController->action_delete($params['res'], $params['id']);
-                    ob_clean();
-
-                    if ($res) {
-                        echo json_encode($res);
-                        return true;
-                    }
-                }
-            }
-
-            require_once 'core2/inc/CoreController.php';
-            $core = new CoreController();
-            echo json_encode($core->action_delete($params));
-
-            return true;
-        }
-
-        return false;
-    }
-
-
-    /**
-     * Метод выполнения переключений полей в таблицах (Y/N)
-     * @return bool
-     * @throws Exception
-     */
-    private function switchAction(): bool {
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return false;
-        }
-
-        parse_str($_SERVER['QUERY_STRING'], $params);
-
-        if ( ! empty($params['module']) &&
-             ! empty($params['action']) &&
-             ! empty($params['loc']) &&
-             ! empty($params['resource']) &&
-             ! empty($_POST['data']) &&
-             ! empty($_POST['is_active']) &&
-             ! empty($_POST['value']) &&
-            $params['module'] == 'admin' &&
-            $params['action'] == 'switch' &&
-            $params['loc'] == 'core'
-        ) {
-
-            $sess     = new SessionContainer('List');
-            $sessData = $sess->{$params['resource']};
-            $loc      = $sessData['loc'] ?? '';
-
-            if ( ! $loc) {
-                throw new Exception($this->translate->tr("Не удалось определить местоположение данных."), 13);
-            }
-
-            parse_str($loc, $location_params);
-            $this->setContext($location_params['module']);
-
-            if ($location_params['module'] !== 'admin') {
-                $module        = $location_params['module'];
-                $location      = $this->getModuleLocation($module);
-                $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
-
-                $this->requireController($location, $modController);
-
-                $controller = new $modController();
-
-                if ($controller instanceof \Core2\Switches) {
-                    try {
-                        ob_start();
-                        $result = $controller->action_switch($params['resource'], $_POST['data'], $_POST['value'], $_POST['is_active']);
-                        ob_clean();
-                    } catch (\Exception $e) {
-                        $result = [ 'status' => $e->getMessage() ];
-                    }
-
-                    if ($result) {
-                        header('Content-type: application/json; charset="utf-8"');
-                        echo json_encode($result === true ? ['status' => "ok"] : $result);
-
-                        return true;
-                    }
-                }
-            }
-
-            require_once 'core2/inc/CoreController.php';
-            $core = new CoreController();
-
-            header('Content-type: application/json; charset="utf-8"');
-            $core->action_switch();
-
-            return true;
-        }
-
-        return false;
-    }
 
 
     /**
@@ -1106,7 +990,10 @@ class Init extends Db {
         $tpl_menu->assign('<!--CURRENT_USER_LOGIN-->', htmlspecialchars($this->auth->NAME));
         $tpl_menu->assign('<!--CURRENT_USER_FN-->',    $this->auth->FN ? htmlspecialchars($this->auth->FN) : "");
         $tpl_menu->assign('<!--CURRENT_USER_LN-->',    $this->auth->LN ? htmlspecialchars($this->auth->LN) : "");
-        $tpl_menu->assign('[GRAVATAR_URL]',            "https://www.gravatar.com/avatar/" . md5(strtolower(trim($this->auth?->EMAIL ?? ''))));
+        $img = "https://www.gravatar.com/avatar/" . md5(strtolower(trim($this->auth?->EMAIL ?? ''))) . "?&s=28&d=mm";
+        $row = $this->dataUsersProfile->getRowByUserId($this->auth->ID);
+        if ($row && $row->avatar) $img = "data:image/png;base64, {$row->avatar}";
+        $tpl_menu->assign('[GRAVATAR_URL]', $img);
 
 
         $modules_js     = [];
@@ -1552,7 +1439,7 @@ class Init extends Db {
         //проверяем наличие контроллера для core2m в модулях
         foreach ($modsList as $k => $data) {
             $location      = $this->getModuleLocation($data['module_id']);
-            if ($this->auth->MOBILE) { //признак того, что мы в core2m
+            if (isset($this->auth->MOBILE) && $this->auth->MOBILE) { //признак того, что мы в core2m
                 $controller = "Mobile" . ucfirst(strtolower($data['module_id'])) . "Controller";
             } else {
                 $controller = "Mod" . ucfirst(strtolower($data['module_id'])) . "Api";
