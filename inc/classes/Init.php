@@ -17,7 +17,7 @@ if ( ! empty($_SERVER['REQUEST_URI'])) {
     $f = explode(".", basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)));
     if (!empty($f[1]) && in_array($f[1], ['txt', 'js', 'css', 'env'])) {
         \Core2\Error::Exception("File not found", 404);
-        exit();
+        exit(); // FIXME Нужно убрать
     }
 }
 
@@ -119,7 +119,7 @@ try {
     if (empty($_SERVER['HTTPS']) && PHP_SAPI !== 'cli') {
         if (isset($config->system) && ! empty($config->system->https)) {
             header('Location: https://' . $_SERVER['SERVER_NAME']);
-            exit();
+            exit(); // TODO нужно убрать
         }
     }
     $tz = $config->system->timezone;
