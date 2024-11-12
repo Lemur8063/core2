@@ -651,6 +651,8 @@ class CoreController extends Common implements File {
                     $i++;
                 }
             }
+
+            return;
         }
 
 		if (file_exists('mod/home/welcome.php')) {
