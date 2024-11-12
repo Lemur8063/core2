@@ -985,6 +985,11 @@ class Db extends Table {
         return $search_value;
     }
 
+    /**
+     * будут ли кешироваться данные таблицы
+     * @param bool $is
+     * @return void
+     */
     public function setCachable(bool $is = true): void
     {
         $this->cachable = $is;
