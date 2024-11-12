@@ -237,7 +237,10 @@ class ModAdminApi extends CommonApi
             if (empty($data['data']) || empty($data['value']) || empty($data['is_active'])) {
                 throw new RuntimeException("Не хватает данных для переключения");
             }
-            [$table, $refid, $id] = explode(".", $data['data']);
+            $table = explode(".", $data['data']);
+            $refid = isset($table[1]) ? $table[1] : '';
+            $id    = isset($table[2]) ? $table[2] : '';
+            $table = $table[0];
             $admin      = false;
             if (strpos($table, 'core_') === 0) {
                 //таблица ядра
