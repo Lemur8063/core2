@@ -1161,6 +1161,8 @@ abstract class Table extends Acl {
         if ($this->isModuleInstalled('profile')) {
             $profile_location = $this->getModuleLocation('profile');
 
+            if (!file_exists("$profile_location/ModProfileController.php")) return null;
+
             if (file_exists("$profile_location/vendor/autoload.php")) {
                 require_once "$profile_location/vendor/autoload.php";
             }
