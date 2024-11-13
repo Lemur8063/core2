@@ -110,7 +110,9 @@ class Error {
 			}
 
 		} else {
-            error_log("{$message} \n " . $exception->getTraceAsString());
+            if ($message != '911') {
+                error_log("{$message} \n " . $exception->getTraceAsString());
+            }
 
 			if (substr($message, 0, 8) == 'SQLSTATE') {
 			    $message = 'Ошибка базы данных';
