@@ -1266,7 +1266,7 @@ class editTable extends initEdit {
 									$temp[] = array($k, $v);
 								}
 							} else {
-							    $sql = $this->replaceTCOL(isset($arr[0]) ? $arr[0] : '');
+							    $sql = $this->replaceTCOL(isset($arr[0]) ? $arr[0] : '', $this->selectSQL[$select]);
 							    if ($sql) {
                                     $data = $this->db->fetchAll($sql, $this->selectSQL[$select]);
                                     foreach ($data as $values) {
