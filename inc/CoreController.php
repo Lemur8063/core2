@@ -607,11 +607,7 @@ class CoreController extends Common implements File {
             return;
 		}
 
-        if ( ! empty($_GET['error_front']) &&
-             $this->config?->log?->error_front &&
-             $this->config?->log?->error_front?->file &&
-             is_string($this->config?->log?->error_front?->file)
-        ) {
+        if ( ! empty($_GET['error_front'])) {
             $request_raw = file_get_contents('php://input', 'r');
             $errors      = $request_raw ? json_decode($request_raw, true) : [];
 
@@ -639,10 +635,7 @@ class CoreController extends Common implements File {
                         $level = $error['level'];
                     }
 
-                    $error_type = ! empty($error['type']) && is_string($error['type']) ? $error['type'] : 'error';
-
-                    $this->log->file($this->config?->log?->error_front?->file)->{$level}($error_type, [
-                        'login'  => $this->auth->NAME,
+                    $this->log->{$level}($this->auth->NAME, [
                         'url'    => $error['url'] ?? null,
                         'error'  => $error['error'] ?? null,
                         'client' => $error['client'] ?? null,
@@ -651,6 +644,8 @@ class CoreController extends Common implements File {
                     $i++;
                 }
             }
+
+            return;
         }
 
 		if (file_exists('mod/home/welcome.php')) {

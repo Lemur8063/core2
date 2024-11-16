@@ -154,7 +154,8 @@ class ModAdminApi extends CommonApi
      */
     private function customDelete($resource, array $ids)
     {
-        $mod = explode("_", $resource);
+        $mod = explode('xxx', $resource);
+        $mod = explode("_", $mod[0]);
         $location      = $this->getModuleLocation($mod[0]); //определяем местоположение модуля
         $modController = "Mod" . ucfirst(strtolower($mod[0])) . "Controller";
         $this->requireController($location, $modController);
