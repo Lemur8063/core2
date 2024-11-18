@@ -836,14 +836,12 @@ class Init extends Db {
             try {
                 $webservice_api = new ModWebserviceApi();
                 return $webservice_api->dispatchApikey(trim($apikey));
+
             } catch (HttpException $e) {
                 throw new \Exception(json_encode([
-                    'msg' => $e->getMessage(),
-                    'code' => $e->getErrorCode()
+                    'msg'  => $e->getMessage(),
+                    'code' => $e->getErrorCode(),
                 ]), $e->getCode() ?: 500);
-
-            } catch (\Exception $e) {
-                throw new \Exception($e->getMessage(), $e->getCode());
             }
         }
     }
