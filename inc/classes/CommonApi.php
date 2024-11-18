@@ -183,6 +183,9 @@ class CommonApi extends \Core2\Acl {
                 else if (strpos($h['Content-Type'], 'application/json') === 0) {
                     $request_raw = json_decode($request_raw, true);
                 }
+                else {
+                    throw new \Exception('Unsupported Media Type', 415);
+                }
                 break;
             case 'PUT':
             case 'PATCH':

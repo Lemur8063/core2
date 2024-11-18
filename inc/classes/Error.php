@@ -110,7 +110,9 @@ class Error {
 			}
 
 		} else {
+            if ($message != '911') {
             error_log("{$message} \n " . $exception->getTraceAsString());
+            }
 
 			if (substr($message, 0, 8) == 'SQLSTATE') {
 			    $message = 'Ошибка базы данных';
@@ -191,6 +193,9 @@ class Error {
 
 		} elseif ($code == 404) {
 			header("{$_SERVER['SERVER_PROTOCOL']} 404 Page not found");
+
+		} elseif ($code == 415) {
+			header("{$_SERVER['SERVER_PROTOCOL']} 415 Unsupported Media Type");
 
 		} elseif ($code == 500) {
 			header("{$_SERVER['SERVER_PROTOCOL']} 500 Internal Server Error");
