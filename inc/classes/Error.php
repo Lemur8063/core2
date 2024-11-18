@@ -61,65 +61,75 @@ class Error {
 	 */
 	public static function catchException(\Exception $exception) {
 
-	    $cnf     = self::getConfig();
-        $message = $exception->getMessage();
-        $code    = $exception->getCode();
+        if ($exception instanceof HttpException) {
+            http_response_code($exception->getCode() ?: 500);
+            header('Content-type: application/json; charset="utf-8"');
+            echo json_encode([
+                'msg'  => $exception->getMessage(),
+                'code' => $exception->getErrorCode(),
+            ]);
 
-		if ($cnf && $cnf->log && $cnf->log->on && $cnf->log->path) {
-            if ((file_exists($cnf->log->path) && is_writable($cnf->log->path)) ||
-                ( ! file_exists($cnf->log->path) && is_dir(dirname($cnf->log->path)) && is_writable(dirname($cnf->log->path)))
-            ) {
+        } else {
+            $cnf     = self::getConfig();
+            $message = $exception->getMessage();
+            $code    = $exception->getCode();
+
+            if ($cnf && $cnf->log && $cnf->log->on && $cnf->log->path) {
+                if ((file_exists($cnf->log->path) && is_writable($cnf->log->path)) ||
+                    ( ! file_exists($cnf->log->path) && is_dir(dirname($cnf->log->path)) && is_writable(dirname($cnf->log->path)))
+                ) {
+                    $trace = $exception->getTraceAsString();
+                    $str   = date('d-m-Y H:i:s') . ' ERROR: ' . $message . "\n" . $trace . "\n\n\n";
+
+                    $f = fopen($cnf->log->path, 'a');
+                    fwrite($f, $str . chr(10) . chr(13));
+                    fclose($f);
+
+                } else {
+                    $text = sprintf('Нет доступа на запись в файл %s.', $cnf->log->path);
+                    self::Exception($text, $code);
+                }
+            }
+
+
+            if ($code == 503) {
+                self::Exception($message, $code);
+            }
+            if ($message == '911') {
+                $text = 'Доступ закрыт! Если вы уверены, что вам сюда можно, обратитесь к администратору.';
+                self::Exception($text, $code);
+
+            } elseif ($message == '404') {
+                self::Exception('Нет такой страницы', 404);
+
+            } elseif ($message == 'expired') {
+                setcookie($cnf->session->name, false);
+                header("{$_SERVER['SERVER_PROTOCOL']} 403 Forbidden");
+                die();
+            }
+
+
+            if ($cnf && $cnf->debug && $cnf->debug->on) {
                 $trace = $exception->getTraceAsString();
-                $str   = date('d-m-Y H:i:s') . ' ERROR: ' . $message . "\n" . $trace . "\n\n\n";
-
-                $f = fopen($cnf->log->path, 'a');
-                fwrite($f, $str . chr(10) . chr(13));
-                fclose($f);
+                $str = date('d-m-Y H:i:s') . ' ERROR: ' . $message . "\n" . $trace . "\n\n\n";
+                if ($cnf->debug->firephp) {
+                    Tool::fb($str);
+                } else {
+                    self::Exception("<PRE>{$str}</PRE>", $code);
+                }
 
             } else {
-                $text = sprintf('Нет доступа на запись в файл %s.', $cnf->log->path);
-                self::Exception($text, $code);
+                if ($message != '911') {
+                    error_log("{$message} \n " . $exception->getTraceAsString());
+                }
+
+                if (substr($message, 0, 8) == 'SQLSTATE') {
+                    $message = 'Ошибка базы данных';
+                }
+
+                self::Exception($message, $code);
             }
         }
-
-
-		if ($code == 503) {
-            self::Exception($message, $code);
-        }
-		if ($message == '911') {
-			$text = 'Доступ закрыт! Если вы уверены, что вам сюда можно, обратитесь к администратору.';
-			self::Exception($text, $code);
-
-		} elseif ($message == '404') {
-			self::Exception('Нет такой страницы', 404);
-
-		} elseif ($message == 'expired') {
-            setcookie($cnf->session->name, false);
-			header("{$_SERVER['SERVER_PROTOCOL']} 403 Forbidden");
-			die();
-		}
-
-
-		if ($cnf && $cnf->debug && $cnf->debug->on) {
-			$trace = $exception->getTraceAsString();
-			$str = date('d-m-Y H:i:s') . ' ERROR: ' . $message . "\n" . $trace . "\n\n\n";
-			if ($cnf->debug->firephp) {
-				Tool::fb($str);
-			} else {
-                self::Exception("<PRE>{$str}</PRE>", $code);
-			}
-
-		} else {
-            if ($message != '911') {
-                error_log("{$message} \n " . $exception->getTraceAsString());
-            }
-
-			if (substr($message, 0, 8) == 'SQLSTATE') {
-			    $message = 'Ошибка базы данных';
-            }
-
-            self::Exception($message, $code);
-		}
 	}
 
 
