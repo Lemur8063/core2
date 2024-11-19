@@ -635,7 +635,10 @@ class CoreController extends Common implements File {
                         $level = $error['level'];
                     }
 
-                    $this->log->{$level}($this->auth->NAME, [
+                    $error_type = ! empty($error['type']) && is_string($error['type']) ? $error['type'] : 'error';
+
+                    $this->log->{$level}($error_type, [
+                        'login'  => $this->auth->NAME,
                         'url'    => $error['url'] ?? null,
                         'error'  => $error['error'] ?? null,
                         'client' => $error['client'] ?? null,
