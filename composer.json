@@ -55,7 +55,8 @@
     "ext-xml": "*"
   },
   "require-dev": {
-    "phpmd/phpmd" : "@stable"
+    "phpmd/phpmd" : "@stable",
+    "phpstan/phpstan": "^2.0"
   },
   "scripts": {
     "post-update-cmd": [
