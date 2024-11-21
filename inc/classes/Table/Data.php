@@ -16,7 +16,7 @@ class Data extends Table {
     /**
      * Получение данных.
      * @return array
-     * @deprecated fetchRows
+     * @deprecated fetchRecords
      */
     public function fetchData(): array {
 
@@ -26,9 +26,31 @@ class Data extends Table {
 
     /**
      * Получение данных.
+     * @return Record[]
+     */
+    public function fetchRecords(): array {
+
+        return $this->fetch(Record::class);
+    }
+
+
+    /**
+     * Получение данных.
      * @return Row[]
      */
     public function fetchRows(): array {
+
+        return $this->fetch(Row::class);
+    }
+
+
+    /**
+     * @param string $class_row
+     * @return array
+     * @throws Exception
+     * @throws \Zend_Db_Adapter_Exception
+     */
+    private function fetch(string $class_row = Row::class): array {
 
         $this->preFetchRows();
 
@@ -69,8 +91,8 @@ class Data extends Table {
                 $data_result = $this->pageData($this->data, $this->records_per_page, $this->current_page);
 
                 if ( ! empty($data_result)) {
-                    foreach ($data_result as $key => $row) {
-                        $this->data_rows[] = new Row($row);
+                    foreach ($data_result as $row) {
+                        $this->data_rows[] = new $class_row($row);
                     }
                 }
 
