@@ -122,11 +122,22 @@ class Db extends Table {
      * Получение данных из базы
      * @return Row[]
      * @throws \Zend_Db_Select_Exception
-     * @deprecated fetchRows
+     * @deprecated fetchRecords
      */
     public function fetchData(): array {
 
         return $this->fetchRows();
+    }
+
+
+    /**
+     * Получение данных из базы
+     * @return Record[]
+     * @throws \Zend_Db_Select_Exception
+     */
+    public function fetchRecords(): array {
+
+        return $this->fetch(Record::class);
     }
 
 
@@ -137,6 +148,21 @@ class Db extends Table {
      */
     public function fetchRows(): array {
 
+        return $this->fetch(Row::class);
+    }
+
+
+    /**
+     * Получение данных из базы
+     * @param string $class_row
+     * @return array
+     * @throws Exception
+     * @throws \DateMalformedStringException
+     * @throws \Zend_Db_Adapter_Exception
+     * @throws \Zend_Db_Select_Exception
+     */
+    private function fetch(string $class_row = Row::class): array {
+
         try {
             if ( ! $this->is_fetched) {
                 $this->preFetchRows();
@@ -144,13 +170,13 @@ class Db extends Table {
                 $this->is_fetched = true;
 
                 if ($this->data instanceof \Zend_Db_Select) {
-                    $this->data_rows = $this->fetchDataSelect($this->data);
+                    $this->data_rows = $this->fetchDataSelect($this->data, $class_row);
 
                 } elseif ($this->data instanceof \Zend_Db_Table_Abstract) {
-                    $this->data_rows = $this->fetchDataTable($this->data);
+                    $this->data_rows = $this->fetchDataTable($this->data, $class_row);
 
                 } elseif ($this->query) {
-                    $this->data_rows = $this->fetchDataQuery($this->query);
+                    $this->data_rows = $this->fetchDataQuery($this->query, $class_row);
                 }
             }
 
@@ -172,24 +198,27 @@ class Db extends Table {
 
     /**
      * @param \Zend_Db_Table_Abstract $table
+     * @param string                  $record_class
      * @return array
+     * @throws \DateMalformedStringException
      * @throws \Zend_Db_Select_Exception
      */
-    private function fetchDataTable(\Zend_Db_Table_Abstract $table): array {
+    private function fetchDataTable(\Zend_Db_Table_Abstract $table, string $record_class = Row::class): array {
 
         $select = $table->select();
 
-        return $this->fetchDataSelect($select);
+        return $this->fetchDataSelect($select, $record_class);
     }
 
 
     /**
      * @param \Zend_Db_Select $select
+     * @param string          $record_class
      * @return array
+     * @throws \DateMalformedStringException
      * @throws \Zend_Db_Select_Exception
-     * @throws \Exception
      */
-    private function fetchDataSelect(\Zend_Db_Select $select): array {
+    private function fetchDataSelect(\Zend_Db_Select $select, string $record_class = Row::class): array {
 
         if ( ! empty($this->session->table->search)) {
             foreach ($this->session->table->search as $key => $value) {
@@ -518,7 +547,7 @@ class Db extends Table {
         $data_rows = [];
         if ( ! empty($data_result)) {
             foreach ($data_result as $row) {
-                $data_rows[] = new Row($row);
+                $data_rows[] = new $record_class($row);
             }
         }
 
@@ -528,11 +557,12 @@ class Db extends Table {
 
     /**
      * Получение данных по запросу sql
-     * @param $query
+     * @param        $query
+     * @param string $record_class
      * @return array
-     * @throws \Exception
+     * @throws \DateMalformedStringException
      */
-    private function fetchDataQuery($query): array {
+    private function fetchDataQuery($query, string $record_class = Row::class): array {
 
         $select = new Table\Db\Select($query);
 
@@ -896,7 +926,7 @@ class Db extends Table {
         $data_rows = [];
         if ( ! empty($result)) {
             foreach ($result as $key => $row) {
-                $data_rows[$key] = new Row($row);
+                $data_rows[$key] = new $record_class($row);
             }
         }
 
