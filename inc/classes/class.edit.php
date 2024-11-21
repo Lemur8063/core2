@@ -154,58 +154,66 @@ class editTable extends initEdit {
 	/**
 	 * set HTML layout for the form
 	 * @param string $html
+     * @return $this
 	 */
-	public function setTemplate($html) {
+	public function setTemplate($html): self {
 		$this->template = $html;
+        return $this;
 	}
+
 
     /**
      * set custom filename for any form control
      * @param $type - form control type
      * @param $filename - absolute path to the file
-     * @return void
+     * @return $this
      */
-    public function setTemplateControl($type, $filename) {
+    public function setTemplateControl($type, $filename): self {
         if (is_file($filename)) {
             $this->tpl_control[$type] = $filename;
         }
+        return $this;
     }
 	
 		
 	/**
-	 * 
 	 * Add new control to the form
-	 * @param string $name - field caption
-	 * @param string $type - type of control (TEXT, LIST, RADIO, CHECKBOX, FILE)
-	 * @param string/array $in - field attributes
-	 * @param string $out - outside HTML
-	 * @param string $default - value by default
-	 * @param string $req - is field required
+	 * @param string       $name    - field caption
+	 * @param string       $type    - type of control (TEXT, LIST, RADIO, CHECKBOX, FILE)
+	 * @param string|array $in      - field attributes
+	 * @param string       $out     - outside HTML
+	 * @param string       $default - value by default
+	 * @param string       $req     - is field required
+     * @return $this
 	 */
-	public function addControl($name, $type, $in = "", $out = "", $default = "", $req = false) {
+	public function addControl($name, $type, $in = "", $out = "", $default = "", $req = false): self {
 		global $counter;
 		if (empty($this->cell['default'])) {
 			$c = new cell($this->main_table_id);
 			$c->addControl($name, $type, $in, $out, $default, $req);
 			$this->cell['default'] = $c;
 		} else {
-			$temp = array(
-				'name' 		=> $name, 
-				'type' 		=> strtolower($type), 
-				'in' 		=> $in, 
-				'out' 		=> $out, 
-				'default' 	=> $default, 
-				'req' 		=> $req
-			);
-			$this->cell['default']->appendControl($temp);
-		}
+            $temp = [
+                'name'    => $name,
+                'type'    => strtolower($type),
+                'in'      => $in,
+                'out'     => $out,
+                'default' => $default,
+                'req'     => $req,
+            ];
+            $this->cell['default']->appendControl($temp);
+        }
+
+        return $this;
 	}
 
-	/**
-	 * @param $name
-	 * @param bool $collapsed
-	 */
-	public function addGroup($name, $collapsed = false) {
+
+    /**
+     * @param $name
+     * @param $collapsed
+     * @return $this
+     */
+	public function addGroup($name, $collapsed = false): self {
 		global $counter;
 		if (empty($this->cell['default'])) {
 			$c = new cell($this->main_table_id);
@@ -219,24 +227,30 @@ class editTable extends initEdit {
 				$this->cell['default']->setGroup(array(0 => $collapsed . $name));
 			}
 		}
-		
+
+        return $this;
 	}
 
-	/**
-	 * @param $value
-	 * @param string $action
-	 */
-	public function addButton($value, $action = '') {
-		$this->buttons[$this->main_table_id][] = array('value' => $value, 'action' => $action);
-	}
 
-	/**
-	 *
-	 * Create button for switch fields, based on values Y/N
-	 * @param string $field_name - name of field
-	 * @param string $value - switch ON or OFF
-	 */
-	public function addButtonSwitch($field_name, $value) {
+    /**
+     * @param $value
+     * @param $action
+     * @return $this
+     */
+	public function addButton($value, $action = ''): self {
+        $this->buttons[$this->main_table_id][] = ['value' => $value, 'action' => $action];
+
+        return $this;
+    }
+
+
+    /**
+     * Create button for switch fields, based on values Y/N
+     * @param string $field_name - name of field
+     * @param string $value      - switch ON or OFF
+     * @throws Exception
+     */
+    public function addButtonSwitch($field_name, $value): self {
 		$tpl = new Templater3($this->tpl_control['switch_button']);
 		if ($value) {
 			$tpl->assign('data-switch="off"', 'data-switch="off" class="hide"');
@@ -250,67 +264,79 @@ class editTable extends initEdit {
 		$html  = '<input type="hidden" id="' . $id . 'hid" name="control[' . $field_name . ']" value="' . $valueInput . '"/>';
 		$html .= $tpl->render();
 		$this->addButtonCustom($html);
+
+        return $this;
 	}
 
-	/**
-	 * @param string $html
-	 */
-	public function addButtonCustom($html = '') {
+
+    /**
+     * @param $html
+     * @return $this
+     */
+	public function addButtonCustom($html = ''): self {
 		$this->buttons[$this->main_table_id][] = array('html' => $html);
+        return $this;
 	}
-	
-	/**
-	 * сохранение значения в служебных полях формы
-	 * @param $id
-	 * @param $value
-	 */
-	public function setSessFormField($id, $value)
-	{
+
+
+    /**
+     * сохранение значения в служебных полях формы
+     * @param $id
+     * @param $value
+     * @return editTable
+     */
+	public function setSessFormField($id, $value): self {
+
         $this->sess_form_custom[$id] = $value;
+        return $this;
 	}
 
 
     /**
      * Установка проверять ли изменения на форме при уходе со страницы
      * @param bool $leave_checking
-     * @return void
+     * @return editTable
      */
-    public function setLeaveChecking(bool $leave_checking): void {
+    public function setLeaveChecking(bool $leave_checking): self {
 
         $this->form_leave_checking = $leave_checking;
+        return $this;
     }
 
 
     /**
      * Установка таблицы для формы
      * @param string $table
-     * @return void
+     * @return self
      */
-    public function setTable(string $table): void {
+    public function setTable(string $table): self {
 
         $this->table = $table;
+        return $this;
     }
 
 
     /**
      * Установка ширины для названий полей
      * @param string|int $width
-     * @return void
+     * @return self
      */
-    public function setWidthLabels(string|int $width): void {
+    public function setWidthLabels(string|int $width): self {
 
         $this->firstColWidth = is_numeric($width) ? "{$width}px" : $width;
+        return $this;
     }
 
 
     /**
      * Установка данных записи
      * @param array $record
-     * @return void
+     * @return self
      */
-    public function setData(array $record): void {
+    public function setData(array $record): self {
 
         $this->SQL = [ $record ];
+        return $this;
     }
 
 
@@ -320,7 +346,7 @@ class editTable extends initEdit {
      * @throws Zend_Db_Adapter_Exception
      * @throws Zend_Exception
      */
-    public function render(array $options = []) {
+    public function render(array $options = []): string {
 
 	    ob_start();
         $this->showTable($options);
@@ -354,7 +380,6 @@ class editTable extends initEdit {
 		} else {
 			$this->noAccess();
 		}
-		return;
 	}
 
 
@@ -2379,10 +2404,13 @@ $controlGroups[$cellId]['html'][$key] .= "
 		$this->HTML .= 	"</br>";
 	}
 
-	/**
-	 * @param $func
-	 */
-	public function save($func, $action = '') {
+
+    /**
+     * @param $func
+     * @param $action
+     * @return $this
+     */
+	public function save($func, $action = ''): self {
         $this->action = $action;
 		$this->isSaved = true;
 		// for javascript functions
@@ -2391,34 +2419,85 @@ $controlGroups[$cellId]['html'][$key] .= "
 		} else {
 			$this->addParams('file', $func);
 		}
+
+        return $this;
+	}
+
+
+    /**
+     * Установка метода для обработки сохранения
+     * @param string $handler
+     * @return editTable
+     */
+	public function setSaveHandler(string $handler): self {
+
+        $this->save("xajax_{$handler}(xajax.getFormValues(this.id))");
+
+        return $this;
 	}
 
 
     /**
      * Установка js кода которых будет выполнен при успешном сохранении
      * @param string $func
-     * @return void
+     * @return editTable
+     * @deprecated использовать setSuccessScript
      */
-	public function saveSuccess(string $func): void {
+	public function saveSuccess(string $func): self {
 
-        $this->setSessFormField('save_success', $func);
+        $this->setSuccessScript($func);
+
+        return $this;
 	}
 
 
-	/**
-	 * @param $va
-	 * @param string $value
-	 */
-	function addParams($va, $value = '') {
-		$this->params[$this->main_table_id][] = array('va' => $va, 'value' => $value);
+    /**
+     * Установка js кода которых будет выполнен при успешном сохранении
+     * @param string $script
+     * @return editTable
+     */
+	public function setSuccessScript(string $script): self {
+
+        $this->setSessFormField('save_success', $script);
+
+        return $this;
 	}
 
-	/**
+
+    /**
+     * Установка сообщения об успешном выполнении
+     * @param string|null $text
+     * @return editTable
+     */
+	public function setSuccessNotice(string $text = null): self {
+
+        $text = $text ?: 'Сохранено';
+        $func = $this->sess_form_custom['save_success'] ?? '';
+
+        $this->setSessFormField('save_success', "{$func};CoreUI.notice.create('{$text}')");
+
+        return $this;
+	}
+
+
+    /**
+     * @param $va
+     * @param $value
+     * @return $this
+     */
+	public function addParams($va, $value = ''): self {
+        $this->params[$this->main_table_id][] = ['va' => $va, 'value' => $value];
+        return $this;
+    }
+
+
+    /**
 	 *
 	 */
 	private function noAccess() {
 		echo $this->classText['noReadAccess'];
 	}
+
 
 	/**
 	 * Сохраняет в сессии данные служебных полей формы
@@ -2511,7 +2590,6 @@ $controlGroups[$cellId]['html'][$key] .= "
             );
         }
     }
-
 }
 
 
@@ -2520,11 +2598,11 @@ $controlGroups[$cellId]['html'][$key] .= "
 
 
 class cell {
-	protected $controls			= array();
-	protected $gr				= array();
-	protected $main_table_id;
-		
-	public function __construct($main_table_id) {
+    protected $controls      = [];
+    protected $gr            = [];
+    protected $main_table_id;
+
+    public function __construct($main_table_id) {
 		$this->main_table_id 	= $main_table_id;
 		
 	}
@@ -2539,15 +2617,15 @@ class cell {
 	 */
 	public function addControl($name, $type, $in = "", $out = "", $default = "", $req = false) {
 		global $counter;
-		$temp = array(
-			'name' 		=> $name, 
-			'type' 		=> strtolower($type), 
-			'in' 		=> $in, 
-			'out' 		=> $out, 
-			'default' 	=> $default, 
-			'req' 		=> $req
-		);
-		$this->controls[$this->main_table_id][$counter] = $temp;
+        $temp = [
+            'name'    => $name,
+            'type'    => strtolower($type),
+            'in'      => $in,
+            'out'     => $out,
+            'default' => $default,
+            'req'     => $req,
+        ];
+        $this->controls[$this->main_table_id][$counter] = $temp;
 		
 		if (!empty($this->gr[$counter])) {
 			$this->controls[$this->main_table_id][$counter]['group'] = $this->gr[$counter];
