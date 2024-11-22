@@ -2441,11 +2441,11 @@ $controlGroups[$cellId]['html'][$key] .= "
      * Установка js кода которых будет выполнен при успешном сохранении
      * @param string $func
      * @return editTable
-     * @deprecated использовать setSuccessScript
+     * @deprecated использовать addSuccessScript
      */
 	public function saveSuccess(string $func): self {
 
-        $this->setSuccessScript($func);
+        $this->addSuccessScript($func);
 
         return $this;
 	}
@@ -2456,9 +2456,11 @@ $controlGroups[$cellId]['html'][$key] .= "
      * @param string $script
      * @return editTable
      */
-	public function setSuccessScript(string $script): self {
+	public function addSuccessScript(string $script): self {
 
-        $this->setSessFormField('save_success', $script);
+        $func = $this->sess_form_custom['save_success'] ?? '';
+
+        $this->setSessFormField('save_success', "{$func};{$script}");
 
         return $this;
 	}
@@ -2469,9 +2471,9 @@ $controlGroups[$cellId]['html'][$key] .= "
      * @param string|null $text
      * @return editTable
      */
-	public function setSuccessNotice(string $text = null): self {
+	public function addSuccessNotice(string $text = null): self {
 
-        $text = $text ?: 'Сохранено';
+        $text = $text ?: $this->_('Сохранено');
         $func = $this->sess_form_custom['save_success'] ?? '';
 
         $this->setSessFormField('save_success', "{$func};CoreUI.notice.create('{$text}')");
