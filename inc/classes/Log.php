@@ -56,7 +56,8 @@ class Log {
                     return new \stdClass();
                 }
 
-            } elseif ($name === 'webhook') {
+            }
+            elseif ($name === 'webhook') {
                 if (isset($this->config->log) &&
                     isset($this->config->log->webhook)
                 ) {
@@ -65,7 +66,8 @@ class Log {
                 } else {
                     return new \stdClass();
                 }
-            } elseif ($name === 'logger') {
+            }
+            elseif ($name === 'logger') {
                 //Logger worker
                 $this->writer = 'file';
             } else {
