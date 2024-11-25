@@ -2483,6 +2483,21 @@ $controlGroups[$cellId]['html'][$key] .= "
 
 
     /**
+     * Установка адреса для перехода при успешном сохранении
+     * @param string $url
+     * @return editTable
+     */
+	public function setSuccessUrl(string $url): self {
+
+        $func = $this->sess_form_custom['save_success'] ?? '';
+
+        $this->setSessFormField('save_success', "{$func};load('{$url}')");
+
+        return $this;
+	}
+
+
+    /**
      * @param $va
      * @param $value
      * @return $this
