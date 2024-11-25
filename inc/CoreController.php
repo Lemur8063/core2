@@ -607,11 +607,7 @@ class CoreController extends Common implements File {
             return;
 		}
 
-        if ( ! empty($_GET['error_front']) &&
-             $this->config?->log?->error_front &&
-             $this->config?->log?->error_front?->file &&
-             is_string($this->config?->log?->error_front?->file)
-        ) {
+        if ( ! empty($_GET['error_front'])) {
             $request_raw = file_get_contents('php://input', 'r');
             $errors      = $request_raw ? json_decode($request_raw, true) : [];
 
@@ -641,7 +637,7 @@ class CoreController extends Common implements File {
 
                     $error_type = ! empty($error['type']) && is_string($error['type']) ? $error['type'] : 'error';
 
-                    $this->log->file($this->config?->log?->error_front?->file)->{$level}($error_type, [
+                    $this->log->{$level}($error_type, [
                         'login'  => $this->auth->NAME,
                         'url'    => $error['url'] ?? null,
                         'error'  => $error['error'] ?? null,
@@ -651,6 +647,8 @@ class CoreController extends Common implements File {
                     $i++;
                 }
             }
+
+            return;
         }
 
 		if (file_exists('mod/home/welcome.php')) {
@@ -776,42 +774,6 @@ class CoreController extends Common implements File {
 		}
 		if ($res) {
 			$out .= '<div>' . sprintf($this->translate->tr("Последний раз Вы заходили %s с IP адреса %s"), '<b>' . $res['login_time2'] . '</b>', '<b>' . $res['ip'] . '</b>') . '</div>';
-		}
-		//Проверка активных сессий данного пользователя
-		if ($this->config->database->adapter == 'Pdo_Mysql') {
-			$res = $this->db->fetchAll("SELECT ip, sid
-										  FROM core_session
-										 WHERE user_id = ?
-										   AND logout_time IS NULL
-										   AND (NOW() - last_activity > $sLife)=0
-										 ", $this->auth->ID);
-		} elseif ($this->config->database->adapter == 'pdo_pgsql') {
-			$res = $this->db->fetchAll("SELECT ip, sid
-										  FROM core_session
-										 WHERE user_id = ?
-										   AND logout_time IS NULL
-										   AND EXTRACT(EPOCH FROM (NOW() - last_activity)) <= $sLife
-										 ", $this->auth->ID);
-		}
-		$co = count($res);
-		if ($co > 1) {
-			$ip = array();
-			foreach ($res as $value) {
-				if ($value['sid'] == session_id()) continue;
-				$ip[] = $value['ip'];
-			}
-			$ip = implode(', ', $ip);
-			if ($co == 2) {
-				$o = '';
-				$px = 'ь';
-				$px2 = 'й';
-			} else {
-				$o = 'o';
-				$px2 = 'е';
-				if (5 >= $co && $co > 2) $px = 'я';
-				elseif ($co > 5) $px = 'ей';
-			}
-			$out .= '<div style="color:red"><b>Внимание! Обнаружен' . $o . ' еще ' . ($co - 1) . ' пользовател' . $px . ', использующи' . $px2 . ' вашу учетную запись.</b><br/>IP: ' . $ip . '</div>';
 		}
 
 

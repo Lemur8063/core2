@@ -804,31 +804,44 @@ class Db {
     }
 
 
-	/**
-	 * Получение всех включенных настроек системы
-	 */
+    /**
+     * Получение всех включенных настроек системы
+     * @return void
+     */
 	private function getAllSettings(): void {
-        $reg      = Registry::getInstance();
-        if ($reg->isRegistered("_settings")) return;
-		$key = "all_settings_" . $this->config->database->params->dbname;
-		if (!($this->cache->hasItem($key))) {
+
+        $reg = Registry::getInstance();
+
+        if ($reg->isRegistered("_settings")) {
+            return;
+        }
+
+        $key = "all_settings_" . $this->config->database->params->dbname;
+
+        if ($this->cache->hasItem($key)) {
+            $settings = $this->cache->getItem($key);
+        }
+
+        if (empty($settings)) {
             require_once(__DIR__ . "/../../mod/admin/Model/Settings.php");
-            $v   = new Model\Settings($this->db);
-			$res = $v->fetchAll($v->select()->where("visible='Y'"))->toArray();
-            $is  = array();
-            foreach ($res as $item) {
-                $is[$item['code']] = array(
-					'value' => $item['value'],
-					'is_custom_sw' => $item['is_custom_sw'],
-					'is_personal_sw' => $item['is_personal_sw']
-				);
-			}
-			$this->cache->setItem($key, $is);
-		} else {
-			$is = $this->cache->getItem($key);
-		}
-        $reg->set("_settings", $is);
-	}
+
+            $table_settings = new Model\Settings($this->db);
+            $settings_rows  = $table_settings->fetchAll($table_settings->select()->where("visible = 'Y'"));
+            $settings       = [];
+
+            foreach ($settings_rows as $settings_row) {
+                $settings[$settings_row->code] = [
+                    'value'          => $settings_row->value,
+                    'is_custom_sw'   => $settings_row->is_custom_sw,
+                    'is_personal_sw' => $settings_row->is_personal_sw,
+                ];
+            }
+            $this->cache->setItem($key, $settings);
+        }
+
+        $reg->set("_settings", $settings);
+    }
+
 
     /**
      * Список всех модулей

@@ -14,11 +14,13 @@ require_once 'Acl.php';
 require_once 'Table/Render.php';
 require_once 'Table/Exception.php';
 require_once 'Table/Row.php';
+require_once 'Table/Record.php';
 require_once 'Table/Cell.php';
 require_once 'Table/Button.php';
 require_once 'Table/Column.php';
 require_once 'Table/Search.php';
 require_once 'Table/Filter.php';
+require_once 'Table/Trait/Attributes.php';
 
 
 /**
@@ -778,6 +780,9 @@ abstract class Table extends Acl {
             foreach ($rows as $row) {
                 if ($row instanceof Table\Row) {
                     $records[] = $row->toArray();
+
+                } elseif ($row instanceof Table\Record) {
+                    $records[] = $row->toArray();
                 }
             }
         }
@@ -1131,6 +1136,13 @@ abstract class Table extends Acl {
             }
         }
     }
+
+
+    /**
+     * Получение данных.
+     * @return array
+     */
+    abstract public function fetchRecords(): array;
 
 
     /**

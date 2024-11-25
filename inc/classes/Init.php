@@ -833,18 +833,8 @@ class Init extends Db {
             //DEPRECATED ктото пытается авторизовать запрос при помощи api ключа
             // ключ проверим в webservice, если такой есть, то пропустим запрос, как если бы он авторизовался легальным способом
             $this->checkWebservice();
-            try {
-                $webservice_api = new ModWebserviceApi();
-                return $webservice_api->dispatchApikey(trim($apikey));
-            } catch (HttpException $e) {
-                throw new \Exception(json_encode([
-                    'msg' => $e->getMessage(),
-                    'code' => $e->getErrorCode()
-                ]), $e->getCode() ?: 500);
-
-            } catch (\Exception $e) {
-                throw new \Exception($e->getMessage(), $e->getCode());
-            }
+            $webservice_api = new ModWebserviceApi();
+            return $webservice_api->dispatchApikey(trim($apikey));
         }
     }
 

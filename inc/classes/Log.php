@@ -222,14 +222,25 @@ class Log {
 
     /**
      * Предупреждение в лог
-     * @param array|string $msg
-     * @param array        $context
+     * @param array|string    $msg
+     * @param array|\Exception $context
      */
     public function error($msg, $context = array()) {
+
         if (is_array($msg)) {
             $context = $msg;
-            $msg = '-';
+            $msg     = '-';
         }
+
+        if ($context instanceof \Exception) {
+            $context = [
+                'message' => $context->getMessage(),
+                'file'    => $context->getFile(),
+                'line'    => $context->getLine(),
+                'trace'   => $context->getTrace(),
+            ];
+        }
+
         if ($this->handlers) {
             $this->setHandler(Logger::ERROR);
         }
