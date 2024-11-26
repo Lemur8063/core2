@@ -9,7 +9,7 @@ require_once 'Db.php';
 class Emitter extends Db {
 
     private $events = [];
-    private $emitents = [];
+    private $subscribers = [];
 
 
     /**
@@ -39,7 +39,7 @@ class Emitter extends Db {
                 $iface = class_implements($modController);
 
                 if ( ! in_array('Subscribe', class_implements($modController))) continue;
-                $this->emitents[$mod] = new $modController();
+                $this->subscribers[$mod] = new $modController();
             }
         }
     }
@@ -54,11 +54,12 @@ class Emitter extends Db {
     public function emit($module, $event_name, $data): array {
 
         $out  = [];
-        foreach ($this->emitents as $mod => $controller) {
+        foreach ($this->subscribers as $mod => $controller) {
             //TODO запустить паралельно
             $res = $controller->listen($module, $event_name, $data);
             if ($res) $out[$mod] = $res;
         }
+        $this->log->info($data, ['module' => $module, 'event' => $event_name]);
         return $out;
     }
 

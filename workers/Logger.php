@@ -41,14 +41,16 @@ class Logger
             $this->_config->log->system->writer == 'file' &&
             !empty($this->_config->log->system->file)
         ) {
-            if (!in_array($this->_config->log->system->file, $this->_system_files)) $this->_system_files[] = $this->_config->log->system->file;
+            if (!in_array($this->_config->log->system->file, $this->_system_files))
+                $this->_system_files[] = $this->_config->log->system->file;
         }
         //журнал запросов
         if (isset($this->_config->log->access->writer) &&
             $this->_config->log->system->writer == 'file' &&
             !empty($this->_config->log->access->file)
         ) {
-            if (!in_array($this->_config->log->system->file, $this->_access_files)) $this->_access_files[] = $this->_config->log->access->file;
+            if (!in_array($this->_config->log->system->file, $this->_access_files))
+                $this->_access_files[] = $this->_config->log->access->file;
         }
 
     }

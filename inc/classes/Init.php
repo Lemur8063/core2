@@ -568,7 +568,7 @@ class Init extends Db {
                         $modController = "Mobile" . ucfirst(strtolower($module)) . "Controller";
                     }
                     elseif (!empty($route['api'])) {
-                        //запрос от приложения
+                        //---запрос от приложения
                         header('Content-type: application/json; charset="utf-8"');
                         try {
                             $modController = "Mod" . ucfirst(strtolower($module)) . "Api";
