@@ -952,12 +952,18 @@ class Render extends Acl {
                                     break;
 
                                 case 'date':
-                                    $date = $value ? date($this->date_mask, strtotime($value)) : '';
+                                    $options = $column['options'] ?? [];
+                                    $format  = $options['format'] ?? $this->date_mask;
+
+                                    $date = $value ? date($format, strtotime($value)) : '';
                                     $tpl->rows->row->col->default->assign('[VALUE]', $date);
                                     break;
 
                                 case 'datetime':
-                                    $date = $value ? date($this->datetime_mask, strtotime($value)) : '';
+                                    $options = $column['options'] ?? [];
+                                    $format  = $options['format'] ?? $this->datetime_mask;
+
+                                    $date = $value ? date($format, strtotime($value)) : '';
                                     $tpl->rows->row->col->default->assign('[VALUE]', $date);
                                     break;
 
