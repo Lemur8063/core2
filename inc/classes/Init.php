@@ -758,51 +758,31 @@ class Init extends Db {
                 //TODO заменить модуль webservice на модуль auth
                 $this->setContext('webservice');
                 $this->checkWebservice();
-                try {
-                    $webservice_api = new ModWebserviceApi();
-                    //требуется webservice 2.6.0
-                    return $webservice_api->dispatchToken($token);
-                } catch (HttpException $e) {
-                    throw new \Exception(json_encode([
-                        'msg' => $e->getMessage(),
-                        'code' => $e->getErrorCode()
-                    ]), $e->getCode() ?: 500);
-
-                } catch (\Exception $e) {
-                    throw new \Exception($e->getMessage(), $e->getCode());
-                }
+                $webservice_api = new ModWebserviceApi();
+                //требуется webservice 2.6.0
+                return $webservice_api->dispatchToken($token);
             }
             if (strpos($_SERVER['HTTP_AUTHORIZATION'], 'Basic') === 0) {
                 $core_config = Registry::get('core_config');
                 if ($core_config->auth && $core_config->auth->scheme == 'basic') {
                     //http basic auth allowed
-                    try {
-                        list($login, $password) = explode(':', base64_decode(substr($_SERVER['HTTP_AUTHORIZATION'], 6)));
-                        $user = $this->dataUsers->getUserByLogin($login);
-                        if ($user && $user['u_pass'] === Tool::pass_salt(md5($password))) {
-                            $auth = new \StdClass();
+                    list($login, $password) = explode(':', base64_decode(substr($_SERVER['HTTP_AUTHORIZATION'], 6)));
+                    $user = $this->dataUsers->getUserByLogin($login);
+                    if ($user && $user['u_pass'] === Tool::pass_salt(md5($password))) {
+                        $auth = new \StdClass();
 
-                            $auth->LIVEID = 0;
+                        $auth->LIVEID = 0;
 
-                            $auth->ID = (int)$user['u_id'];
-                            $auth->NAME = $user['u_login'];
-                            $auth->EMAIL = $user['email'];
-                            $auth->LN = $user['lastname'];
-                            $auth->FN = $user['firstname'];
-                            $auth->MN = $user['middlename'];
-                            $auth->ADMIN = $user['is_admin_sw'] == 'Y' ? true : false;
-                            $auth->ROLE = $user['role'];
-                            $auth->ROLEID = (int)$user['role_id'];
-                            return $auth;
-                        }
-                    } catch (HttpException $e) {
-                        throw new \Exception(json_encode([
-                            'msg' => $e->getMessage(),
-                            'code' => $e->getErrorCode()
-                        ]), $e->getCode() ?: 500);
-
-                    } catch (\Exception $e) {
-                        throw new \Exception($e->getMessage(), $e->getCode());
+                        $auth->ID = (int)$user['u_id'];
+                        $auth->NAME = $user['u_login'];
+                        $auth->EMAIL = $user['email'];
+                        $auth->LN = $user['lastname'];
+                        $auth->FN = $user['firstname'];
+                        $auth->MN = $user['middlename'];
+                        $auth->ADMIN = $user['is_admin_sw'] == 'Y' ? true : false;
+                        $auth->ROLE = $user['role'];
+                        $auth->ROLEID = (int)$user['role_id'];
+                        return $auth;
                     }
                 }
             }
@@ -815,18 +795,8 @@ class Init extends Db {
             if (!$token) return;
             $this->setContext('webservice');
             $this->checkWebservice();
-            try {
-                $webservice_api = new ModWebserviceApi();
-                return $webservice_api->dispatchWebToken($token);
-            } catch (HttpException $e) {
-                throw new \Exception(json_encode([
-                    'msg' => $e->getMessage(),
-                    'code' => $e->getErrorCode()
-                ]), $e->getCode() ?: 500);
-
-            } catch (\Exception $e) {
-                throw new \Exception($e->getMessage(), $e->getCode());
-            }
+            $webservice_api = new ModWebserviceApi();
+            return $webservice_api->dispatchWebToken($token);
         }
         elseif (!empty($_GET['apikey']) || !empty($_SERVER['HTTP_CORE2_APIKEY'])) {
             $apikey  = ! empty($_SERVER['HTTP_CORE2_APIKEY']) ? $_SERVER['HTTP_CORE2_APIKEY'] : $_GET['apikey'];
