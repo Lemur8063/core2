@@ -25,7 +25,6 @@ class Common extends \Core2\Acl {
 	protected $actionURL;
 	protected $resId;
 
-    private $emitents = array();
 	private $AR = array(
         'module',
         'action'

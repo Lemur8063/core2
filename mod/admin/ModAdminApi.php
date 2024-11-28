@@ -127,6 +127,17 @@ class ModAdminApi extends CommonApi
                 }
             }
 
+
+        } catch (RuntimeException $e) {
+            throw new Exception($this->translate->tr($e->getMessage()), 400);
+        } catch (Exception $e) {
+            return Error::catchJsonException([
+                'error' => $e->getMessage()
+            ], $e->getCode() ?: 500);
+        }
+
+        $this->db->beginTransaction();
+        try {
             foreach ($ids as $key) {
                 $where = array($this->db->quoteInto("`$refid` = ?", $key));
                 if ($authorOnly) {
@@ -135,10 +146,11 @@ class ModAdminApi extends CommonApi
                 if ($nodelete) $this->db->update($table, array('is_deleted_sw' => 'Y'), $where);
                 else $this->db->delete($table, $where);
             }
+            $this->db->commit();
+            $this->emit('delete', [$table . "." . $refid => $ids]); //генерируем событие удаления для слушателей
             return true;
-        } catch (RuntimeException $e) {
-            throw new Exception($this->translate->tr($e->getMessage()), 400);
         } catch (Exception $e) {
+            $this->db->rollBack();
             return Error::catchJsonException([
                 'error' => $e->getMessage()
             ], $e->getCode() ?: 500);
