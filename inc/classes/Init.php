@@ -93,18 +93,6 @@ if (empty($config['temp'])) {
 //обрабатываем общий конфиг
 try {
 
-    if (PHP_SAPI === 'cli') { //определяем имя секции для cli режима
-        $options = getopt('m:a:p:s:', array(
-            'module:',
-            'action:',
-            'param:',
-            'section:'
-        ));
-        if (( ! empty($options['section']) && is_string($options['section'])) || ( ! empty($options['s']) && is_string($options['s']))) {
-            $_SERVER['SERVER_NAME'] = ! empty($options['section']) ? $options['section'] : $options['s'];
-        }
-    }
-
     $section = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'production';
 
     $conf     = new Core2\Config($config);
@@ -116,7 +104,7 @@ try {
         $config->merge($conf->readIni($conf_d, $section));
     }
 
-    if (empty($_SERVER['HTTPS']) && PHP_SAPI !== 'cli') {
+    if (empty($_SERVER['HTTPS'])) {
         if (isset($config->system) && ! empty($config->system->https)) {
             header('Location: https://' . $_SERVER['SERVER_NAME']);
             exit(); // TODO нужно убрать
@@ -183,8 +171,6 @@ require_once 'Common.php';
 require_once 'Templater2.php'; //DEPRECATED
 require_once 'Templater3.php';
 require_once 'SSE.php';
-require_once 'Cli.php';
-
 
 /**
  * Class Init
@@ -201,7 +187,6 @@ class Init extends Db {
      * @var Core2\Acl
      */
     private $acl;
-    protected $is_cli = false;
     protected $is_rest = array();
     protected $is_soap = array();
     private $is_xajax;
@@ -220,12 +205,6 @@ class Init extends Db {
             $this->auth = $auth;
             Registry::set('auth', $this->auth);
             return; //выходим, если авторизация состоялась
-        }
-
-        if (PHP_SAPI === 'cli') { //TODO авторизация тоже не помешала бы
-            $this->is_cli = true;
-            Registry::set('auth', new StdClass());
-            return;
         }
 
         //сохраняем параметры сессии
@@ -293,11 +272,6 @@ class Init extends Db {
      * @throws Exception
      */
     public function dispatch() {
-
-        if ($this->is_cli || PHP_SAPI === 'cli') {
-            $cli = new \Core2\Cli();
-            return $cli->run();
-        }
 
         // Парсим маршрут
         $route = $this->routeParse();
@@ -646,13 +620,9 @@ class Init extends Db {
                     }
                 }
 
-                $request_method = PHP_SAPI === 'cli'
-                    ? 'CLI'
-                    : ( ! empty($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'none');
+                $request_method = ! empty($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'none';
 
-                $query_string = PHP_SAPI === 'cli'
-                    ? ($this->getPidCommand(posix_getpid()) ?: '-')
-                    : ( ! empty($_SERVER['QUERY_STRING']) ? $_SERVER['QUERY_STRING'] : '');
+                $query_string = ! empty($_SERVER['QUERY_STRING']) ? $_SERVER['QUERY_STRING'] : '';
 
                 if ($total_time >= 1 || count($sql_queries) >= 100 || count($sql_queries) == 0) {
                     $function_log = 'warning';
