@@ -922,7 +922,9 @@ class Init extends Db {
         $tpl_menu->assign('<!--CURRENT_USER_LN-->',    $this->auth->LN ? htmlspecialchars($this->auth->LN) : "");
         $img = "https://www.gravatar.com/avatar/" . md5(strtolower(trim($this->auth?->EMAIL ?? ''))) . "?&s=28&d=mm";
         $row = $this->dataUsersProfile->getRowByUserId($this->auth->ID);
-        if ($row && $row->avatar) $img = "data:image/png;base64, {$row->avatar}";
+        if ($row && isset($row->avatar) && $row->avatar) {
+            $img = "data:image/png;base64, {$row->avatar}";
+        }
         $tpl_menu->assign('[GRAVATAR_URL]', $img);
 
 

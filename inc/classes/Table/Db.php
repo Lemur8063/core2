@@ -902,7 +902,13 @@ class Db extends Table {
             if ($this->cachable) {
                 $cache_key = $this->table . ":" . md5(json_encode($this->query_params + [$select_sql]));
 
-                if ( ! $this->cache->hasItem($cache_key)) {
+                if ($this->cache->hasItem($cache_key)) {
+                    $cache_data          = $this->cache->getItem($cache_key);
+                    $this->records_total = $cache_data['records_total'] ?? 0;
+                    $result              = $cache_data['data'] ?? [];
+                }
+
+                if ( ! isset($cache_data)) {
                     $result = $db->fetchAll($select_sql, $this->query_params);
                     $this->records_total = $db->fetchOne("SELECT FOUND_ROWS()");
 
@@ -910,12 +916,8 @@ class Db extends Table {
                         'data'          => $result,
                         'records_total' => $this->records_total,
                     ]);
-
-                } else {
-                    $cache_data          = $this->cache->getItem($cache_key);
-                    $this->records_total = $cache_data['records_total'];
-                    $result              = $cache_data['data'];
                 }
+
             } else {
                 $result              = $db->fetchAll($select_sql, $this->query_params);
                 $this->records_total = $db->fetchOne("SELECT FOUND_ROWS()");

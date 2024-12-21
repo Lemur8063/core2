@@ -306,7 +306,9 @@ class ModAdminApi extends CommonApi
      */
     private function customSwitch($resource, $table_field, $refid, $value)
     {
-        $mod = explode("_", $resource);
+
+        $resource_clean = str_contains($resource, 'xxx') ? explode("xxx", $resource)[0] : $resource;
+        $mod            = explode("_", $resource_clean);
         $location      = $this->getModuleLocation($mod[0]);
         $modController = "Mod" . ucfirst(strtolower($mod[0])) . "Controller";
 
