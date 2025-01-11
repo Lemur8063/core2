@@ -139,7 +139,7 @@ class Acl extends Db {
 						$acl->addRole(new Role($roleName));
 					}
 
-					$access = unserialize($role['access']);
+					$access = $role['access'] ? unserialize($role['access']) : null;
 
                     if ( ! empty($access)) {
                         foreach ($access as $type => $data) {
