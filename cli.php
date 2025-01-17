@@ -65,7 +65,7 @@ try {
         'system'       => ['name' => 'CORE2'],
         'include_path' => '',
         'temp'         => getenv('TMP'),
-        'debug'        => ['on' => false],
+        'debug'        => ['on' => true],
         'session'      => [
             'cookie_httponly'  => true,
             'use_only_cookies' => true,
@@ -121,7 +121,7 @@ try {
         if ($config->database->adapter === 'Pdo_Mysql') {
             $config->database->params->adapterNamespace = 'Core_Db_Adapter';
             //подключаем собственный адаптер базы данных
-            require_once($config->database->params->adapterNamespace . "_{$config->database->adapter}.php");
+            require_once('inc/classes/' . $config->database->params->adapterNamespace . "_{$config->database->adapter}.php");
         } elseif ($config->database->adapter === 'Pdo_Pgsql') {
             $config->database->params->adapterNamespace = 'Zend_Db_Adapter';
             $config->database->schema = $config->database->params->dbname;
@@ -142,6 +142,7 @@ try {
     }
 
 //сохраняем конфиг
+
     Registry::set('config', $config);
 
     //подключаем мультиязычность

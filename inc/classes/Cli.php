@@ -21,7 +21,7 @@ class Cli extends Db
             ? array()
             : (is_array($params) ? $params : array($params));
 
-        $this->db; // FIXME хак
+        //$this->db; // FIXME хак
 
         if ( ! $this->isModuleInstalled($module)) {
             throw new \Exception(sprintf($this->_("Module '%s' not found"), $module));
