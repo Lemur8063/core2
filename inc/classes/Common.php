@@ -368,6 +368,8 @@ class Common extends \Core2\Acl {
      */
     protected function sendErrorMessage($message, $data = []) {
 
+        $this->log->error($message, $data);
+
         $admin_email = $this->getSetting('admin_email');
 
         if (empty($admin_email)) {
