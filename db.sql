@@ -7,7 +7,7 @@
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
--- Дамп структуры для таблица avtoprom_tech.core_available_modules
+
 CREATE TABLE IF NOT EXISTS `core_available_modules` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `module_id` varchar(60) NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS `core_available_modules` (
   KEY `idx1_core_available_modules` (`lastuser`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_controls
+
 CREATE TABLE IF NOT EXISTS `core_controls` (
   `tbl` varchar(60) NOT NULL,
   `keyfield` varchar(20) NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `core_controls` (
   KEY `tbl` (`tbl`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_enum
+
 CREATE TABLE IF NOT EXISTS `core_enum` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(128) NOT NULL DEFAULT '',
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS `core_enum` (
   CONSTRAINT `fk1_core_enum` FOREIGN KEY (`parent_id`) REFERENCES `core_enum` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_log
+
 CREATE TABLE IF NOT EXISTS `core_log` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int unsigned NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS `core_log` (
   KEY `idx3_core_log` (`sid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_modules
+
 CREATE TABLE IF NOT EXISTS `core_modules` (
   `m_id` int unsigned NOT NULL AUTO_INCREMENT,
   `m_name` varchar(60) NOT NULL DEFAULT '',
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS `core_modules` (
   UNIQUE KEY `idx2_core_modules` (`module_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_roles
+
 CREATE TABLE IF NOT EXISTS `core_roles` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL DEFAULT '',
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS `core_roles` (
   UNIQUE KEY `idx1_core_roles` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_session
+
 CREATE TABLE IF NOT EXISTS `core_session` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `sid` varchar(128) NOT NULL DEFAULT '',
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS `core_session` (
   KEY `idx4_core_session` (`is_kicked_sw`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_settings
+
 CREATE TABLE IF NOT EXISTS `core_settings` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `lastuser` int unsigned DEFAULT NULL,
@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS `core_settings` (
   UNIQUE KEY `idx1_core_settings` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_submodules
+
 CREATE TABLE IF NOT EXISTS `core_submodules` (
   `sm_id` int unsigned NOT NULL AUTO_INCREMENT,
   `sm_name` varchar(128) NOT NULL DEFAULT '',
@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS `core_submodules` (
   CONSTRAINT `fk1_core_submodules` FOREIGN KEY (`m_id`) REFERENCES `core_modules` (`m_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_users
+
 CREATE TABLE IF NOT EXISTS `core_users` (
   `u_id` int unsigned NOT NULL AUTO_INCREMENT,
   `u_login` varchar(120) NOT NULL DEFAULT '',
@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS `core_users` (
   KEY `idx3_core_users` (`role_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_users_profile
+
 CREATE TABLE IF NOT EXISTS `core_users_profile` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int unsigned NOT NULL,
@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS `core_users_profile` (
   CONSTRAINT `fk1_core_users_profile` FOREIGN KEY (`user_id`) REFERENCES `core_users` (`u_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_users_roles
+
 CREATE TABLE IF NOT EXISTS `core_users_roles` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int unsigned NOT NULL,
@@ -213,10 +213,10 @@ CREATE TABLE IF NOT EXISTS `core_users_roles` (
   CONSTRAINT `fk1_core_users_roles` FOREIGN KEY (`role_id`) REFERENCES `core_roles` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Дамп структуры для таблица avtoprom_tech.core_worker_jobs
+
 CREATE TABLE IF NOT EXISTS `core_worker_jobs` (
-  `id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `handler` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `id` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `handler` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `time_start` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `time_finish` timestamp NULL DEFAULT NULL,
   `denominator` int DEFAULT '0',
