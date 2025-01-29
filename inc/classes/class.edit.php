@@ -1471,7 +1471,11 @@ class editTable extends initEdit {
                                 $options_out = '';
                                 foreach ($options as $options_key => $options_value) {
                                     if (is_array($options_value)) {
-                                        if (isset($options_value[$value['default']])) {
+                                        if ( ! empty($options_value['value']) && $options_value['value'] == $value['default']) {
+                                            $options_out = $options_value['title'] ?? '';
+                                            break;
+
+                                        } elseif (isset($options_value[$value['default']])) {
                                             $options_out = $options_value[$value['default']];
                                             break;
                                         }
