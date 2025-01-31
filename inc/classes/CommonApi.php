@@ -140,6 +140,9 @@ class CommonApi extends \Core2\Acl {
                 return $module_config;
             }
         }
+        elseif (strpos($k, 'mod') === 0) {
+            throw new \Exception($this->_("ModController is no able to use in API"), 500);
+        }
         else {
             $v = $this;
         }
