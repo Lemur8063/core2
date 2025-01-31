@@ -1855,11 +1855,16 @@ class editTable extends initEdit {
                                 $datasets    = json_decode(preg_replace('/[\x00-\x1F\x80-\xFF]/u', '', $json_string), true);
                             }
 
+                            $is_delete   = ! isset($value['in']['is_delete']) || (bool)$value['in']['is_delete'];
+                            $is_add      = ! isset($value['in']['is_add']) || (bool)$value['in']['is_add'];
+                            $item_fields = $value['in']['fields'] ?? $value['in'];
+
+
                             if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 if ( ! empty($datasets)) {
                                     $tpl = new Templater3($this->tpl_control['dataset']);
 
-                                    foreach ($value['in'] as $item_field) {
+                                    foreach ($item_fields as $item_field) {
                                         $tpl->title->assign('[TITLE]', $item_field['title']);
                                         $tpl->title->reassign();
                                     }
@@ -1867,7 +1872,7 @@ class editTable extends initEdit {
                                     $num = 1;
                                     foreach ($datasets as $dataset) {
 
-                                        foreach ($value['in'] as $item_field) {
+                                        foreach ($item_fields as $item_field) {
                                             $field_value = '';
 
                                             if ( ! empty($dataset) && isset($dataset[$item_field['code']])) {
@@ -1878,7 +1883,7 @@ class editTable extends initEdit {
 
                                             $type_name = $item_field['type'] ?? 'text';
 
-                                            if ( ! in_array($type_name, ['text', 'textarea', 'select', 'select2', 'date', 'datetime', 'number', 'switch', 'hidden'])) {
+                                            if ( ! in_array($type_name, ['text', 'textarea', 'select', 'select2', 'date', 'datetime', 'number', 'switch', 'hidden', 'text_readonly'])) {
                                                 $type_name = 'text';
                                             }
 
@@ -1916,13 +1921,13 @@ class editTable extends initEdit {
                                 }
 
                             } else {
-                                foreach ($value['in'] as $key_column => $option) {
+                                foreach ($item_fields as $key_column => $option) {
                                     if ( ! empty($option['options'])) {
                                         $options = [];
                                         foreach ($option['options'] as $key_val => $item) {
                                             $options[] = ['val' => $key_val, 'title' => $item];
                                         }
-                                        $value['in'][$key_column]['options'] = $options;
+                                        $item_fields[$key_column]['options'] = $options;
                                     }
                                 }
 
@@ -1930,12 +1935,17 @@ class editTable extends initEdit {
                                 $tpl->assign('[THEME_PATH]', self::THEME_HTML);
                                 $tpl->assign('[FIELD_ID]',   $fieldId);
                                 $tpl->assign('[FIELD]',      $field);
-                                $tpl->assign('[OPTIONS]',    addslashes(json_encode($value['in'])));
+                                $tpl->assign('[OPTIONS]',    addslashes(json_encode($item_fields)));
 
-                                $tpl->touchBlock('delete_col');
-                                $tpl->touchBlock('edit_controls');
+                                if ($is_delete) {
+                                    $tpl->touchBlock('delete_col');
+                                }
 
-                                foreach ($value['in'] as $item_field) {
+                                if ($is_add) {
+                                    $tpl->touchBlock('edit_controls');
+                                }
+
+                                foreach ($item_fields as $item_field) {
                                     if (empty($item_field['type']) || $item_field['type'] != 'hidden') {
                                         $tpl->title->assign('[TITLE]', $item_field['title'] ?? '');
                                         $tpl->title->reassign();
@@ -1947,7 +1957,7 @@ class editTable extends initEdit {
                                     $num = 1;
                                     foreach ($datasets as $dataset) {
 
-                                        foreach ($value['in'] as $item_field) {
+                                        foreach ($item_fields as $item_field) {
                                             $field_value = '';
 
                                             if ( ! empty($dataset) && isset($dataset[$item_field['code']])) {
@@ -1963,7 +1973,7 @@ class editTable extends initEdit {
 
                                             $type_name = $item_field['type'] ?? 'text';
 
-                                            if ( ! in_array($type_name, ['text', 'textarea', 'select','select2', 'date', 'datetime', 'number', 'switch', 'hidden'])) {
+                                            if ( ! in_array($type_name, ['text', 'textarea', 'select','select2', 'date', 'datetime', 'number', 'switch', 'hidden', 'text_readonly'])) {
                                                 $type_name = 'text';
                                             }
 
@@ -1989,7 +1999,10 @@ class editTable extends initEdit {
                                             $tpl->item->field->reassign();
                                         }
 
-                                        $tpl->item->touchBlock('delete');
+                                        if ($is_delete) {
+                                            $tpl->item->touchBlock('delete');
+                                        }
+
                                         $tpl->item->assign('[ID]', $fieldId . '-' . $num);
                                         $tpl->item->reassign();
                                         $num++;
@@ -1997,7 +2010,7 @@ class editTable extends initEdit {
 
                                 }
                                 else {
-                                    foreach ($value['in'] as $item_field) {
+                                    foreach ($item_fields as $item_field) {
                                         $field_attributes  = ! empty($item_field['attributes'])
                                             ? $item_field['attributes']
                                             : '';
@@ -2033,7 +2046,9 @@ class editTable extends initEdit {
                                         $tpl->item->field->reassign();
                                     }
 
-                                    $tpl->item->touchBlock('delete');
+                                    if ($is_delete) {
+                                        $tpl->item->touchBlock('delete');
+                                    }
                                     $tpl->item->assign('[ID]', $fieldId . '-1');
                                 }
 
