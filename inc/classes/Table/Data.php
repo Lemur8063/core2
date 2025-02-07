@@ -215,6 +215,7 @@ class Data extends Table {
                             }
                             break;
 
+                        case 'match':
                         case 'text':
                             $filter_value = trim($filter_value);
 

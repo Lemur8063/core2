@@ -26,6 +26,7 @@ class Filter {
         'checkbox',
         'select',
         'multiselect',
+        'match'
     ];
 
 

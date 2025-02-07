@@ -286,6 +286,9 @@ var listx = {
 							} else {
 								var loc = listx.loc[id];
 								if (data) {
+									if (data.notice) {
+										CoreUI.notice.create(data.notice);
+									}
 									if (data.alert) {
 										alert(data.alert);
 									}
