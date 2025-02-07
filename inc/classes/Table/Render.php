@@ -360,6 +360,7 @@ class Render extends Acl {
                     switch ($search['type']) {
                         case 'text' :
                         case 'text_strict' :
+                        case 'match':
                             $tpl->search_container->search_field->text->assign("[KEY]",     $key);
                             $tpl->search_container->search_field->text->assign("[VALUE]",   $control_value);
                             $tpl->search_container->search_field->text->assign("[IN_TEXT]", $attributes_str);
@@ -521,6 +522,7 @@ class Render extends Acl {
                     switch ($filter['type']) {
                         case 'text' :
                         case 'text_strict' :
+                        case 'match':
                             $tpl->filter_controls->filter_control->text->assign("[KEY]",   $key);
                             $tpl->filter_controls->filter_control->text->assign("[VALUE]", $control_value);
                             $tpl->filter_controls->filter_control->text->assign("[TITLE]", $filter['title'] ?? '');
@@ -919,6 +921,7 @@ class Render extends Acl {
 
                             switch ($column['type']) {
                                 case 'text':
+                                case 'match':
                                     $tpl->rows->row->col->default->assign('[VALUE]', htmlspecialchars($value));
                                     break;
 

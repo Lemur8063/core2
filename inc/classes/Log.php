@@ -191,8 +191,11 @@ class Log {
      */
     public function info($msg, $context = array()) {
         if (is_array($msg)) {
-            $context = $msg;
-            $msg = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
         if ($this->handlers) {
             $this->setHandler(Logger::INFO);
@@ -209,8 +212,11 @@ class Log {
      */
     public function warning($msg, $context = array()) {
         if (is_array($msg)) {
-            $context = $msg;
-            $msg = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
         if ($this->handlers) {
             $this->setHandler(Logger::WARNING);
@@ -228,8 +234,11 @@ class Log {
     public function error($msg, $context = array()) {
 
         if (is_array($msg)) {
-            $context = $msg;
-            $msg     = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
 
         if ($context instanceof \Exception) {
@@ -256,8 +265,11 @@ class Log {
      */
     public function debug($msg, $context = array()) {
         if (is_array($msg)) {
-            $context = $msg;
-            $msg = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
         if ($this->handlers) {
             $this->setHandler(Logger::DEBUG);

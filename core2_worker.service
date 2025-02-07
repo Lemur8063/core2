@@ -1,0 +1,13 @@
+[Unit]
+Description=CORE2 worker service
+After=network.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=www-data
+ExecStart=/usr/bin/env php8.2 core2/worker.php -s example.com
+
+[Install]
+WantedBy=multi-user.target

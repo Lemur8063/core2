@@ -341,6 +341,18 @@ class Db extends Table {
                     $value = $this->formatSearchType($type, $value);
 
                     switch ($type) {
+
+                        case self::FILTER_MATCH:
+                            $filter_value = trim($value);
+                            if ($filter_value != '') {
+                                $quoted_value = str_replace(['+', '-', '<', '>', '(', ')', '~', '*', '"'], '', $filter_value);
+                                $quoted_value = explode(' ', $quoted_value);
+                                $quoted_value = array_filter($quoted_value);
+                                $quoted_value = array_reduce($quoted_value, fn($carry, $item) => $carry .' +' . $item . '*' , '');
+                                $select->where("MATCH({$field}) AGAINST ('{$quoted_value}' IN BOOLEAN MODE)");
+                            }
+                            break;
+
                         case self::FILTER_TEXT:
                             $value = trim($value);
 
@@ -356,7 +368,6 @@ class Db extends Table {
                                 $select->where("{$field} LIKE ?", "%{$value}%");
                             }
                             break;
-
                         case self::FILTER_DATE_ONE:
                         case self::FILTER_TEXT_STRICT:
                         case self::FILTER_RADIO:
@@ -789,6 +800,15 @@ class Db extends Table {
                                     $select->addWhere("{$filter_field} LIKE {$quoted_value}");
                                 }
                             }
+
+                        case self::FILTER_MATCH:
+                            if ($filter_value != '') {
+                                $quoted_value = str_replace(['+', '-', '<', '>', '(', ')', '~', '*', '"'], '', $filter_value);
+                                $quoted_value = explode(' ', $quoted_value);
+                                $quoted_value = array_filter($quoted_value);
+                                $quoted_value = array_reduce($quoted_value, fn($carry, $item) => $carry .' +' . $item . '*' , '');
+                                $select->addWhere("MATCH({$filter_field}) AGAINST ('{$quoted_value}' IN BOOLEAN MODE)");
+                            }
                             break;
                     }
                 }
@@ -1025,5 +1045,20 @@ class Db extends Table {
     public function setCachable(bool $is = true): void
     {
         $this->cachable = $is;
+    }
+
+    /**
+     * Удаляет строку с данными
+     * иногда это нужно
+     * @param int $i
+     * @return bool
+     */
+    public function deleteRow(int $i): bool
+    {
+        if (isset($this->data_rows[$i])) {
+            unset($this->data_rows[$i]);
+            return true;
+        }
+        return false;
     }
 }

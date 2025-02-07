@@ -92,6 +92,7 @@ abstract class Table extends Acl {
 
     const FILTER_SELECT      = 'select';
     const FILTER_TEXT        = 'text';
+    const FILTER_MATCH       = 'match';
     const FILTER_TEXT_STRICT = 'text_strict';
     const FILTER_DATE_ONE    = 'date_one';
     const FILTER_DATE_MONTH  = 'date_month';
