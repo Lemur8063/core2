@@ -854,7 +854,7 @@ class Render extends Acl {
                         $group_value = $row['cells'][$group_field]['value'];
                         $count_cols  = 1;
 
-                        $tpl->rows->assign('<tr', '<tr class="coreui-table-row-group"');
+                        $tpl->rows->assign('[ROW_ATTR]', 'class="coreui-table-row-group"');
 
                         if ( ! empty($this->table['show']) && ! empty($this->table['show']['selectRows'])) {
                             $tpl->rows->group->touchBlock('group_checkbox');
@@ -871,7 +871,6 @@ class Render extends Acl {
                         $tpl->rows->reassign();
                     }
 
-                    $tpl->rows->assign('<tr', '<tr');
                     $tpl->rows->row->assign('[ID]', $row_id);
 
                     if ( ! empty($this->table['show']) && ! empty($this->table['show']['lineNumbers'])) {
@@ -1036,7 +1035,7 @@ class Render extends Acl {
                                 $attribs_string .= " {$name}=\"{$attr}\"";
                             }
                         }
-                        $tpl->rows->assign('<tr', '<tr ' . $attribs_string);
+                        $tpl->rows->assign('[ROW_ATTR]', $attribs_string);
                     }
 
                     if ( ! empty($this->table['show']) && ! empty($this->table['show']['selectRows'])) {
