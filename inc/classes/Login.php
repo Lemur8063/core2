@@ -420,14 +420,49 @@ class Login extends \Common {
         $html = $this->getIndex();
         $html = str_replace('<!--index -->', $tpl->render(), $html);
 
-
-        if ($isset_phone) {
-            $scripts = [
-                '<script src="core2/js/cleave.min.js"></script>',
-                '<script src="core2/js/cleave-phone.i18n.js"></script>',
-            ];
-            $html = str_replace('<!--system_js-->', implode('', $scripts), $html);
+        $scripts = [];
+        $reg_config = $this->modAuth->moduleConfig->recaptcha;
+        if ($reg_config && !empty($reg_config->key)) {
+            $scripts[] = '<script src="https://www.google.com/recaptcha/api.js?render=' . $reg_config->key . '"></script>';
+            $scripts[] = '<script>
+                    document.addEventListener("DOMContentLoaded", function(e) {
+                        $(".form-registration").parent()[0].addEventListener("submit", 
+                            function(e) {
+                                const f=e.target;
+                                if (!document.getElementById(\'g-recaptcha-response\')) {
+                                    var el = document.createElement(\'input\');
+                                    el.setAttribute(\'id\', \'g-recaptcha-response\');
+                                    el.setAttribute(\'name\', \'g-recaptcha-response\');
+                                    el.setAttribute(\'type\', \'hidden\');
+                                    f.appendChild(el);
+                                }
+                                e.preventDefault();
+                                grecaptcha.ready(function() {
+                                  grecaptcha.execute("' . $reg_config->key . '", {action: "submit"}).then(function(token) {
+                                      document.getElementById(\'g-recaptcha-response\').value = token;
+                                      CoreLogin.registration()
+                                  });
+                                });
+                            },
+                            false
+                        );
+                    });
+            </script>';
+        } else {
+            $scripts[] = '<script>
+                    document.addEventListener("DOMContentLoaded", function(e) {
+                        $(".form-registration").parent()[0].addEventListener("submit",
+                        CoreLogin.registration,
+                        false
+                    );
+                });
+            </script>';
         }
+        if ($isset_phone) {
+            $scripts[] = '<script src="core2/js/cleave.min.js"></script>';
+            $scripts[] = '<script src="core2/js/cleave-phone.i18n.js"></script>';
+        }
+        $html = str_replace('<!--system_js-->', implode('', $scripts), $html);
 
         return $html;
     }
@@ -782,8 +817,50 @@ class Login extends \Common {
      * @throws \Zend_Db_Adapter_Exception
      */
     private function registration(array $fields, array $data, $role_id) {
-
         try {
+            if (!empty($data['g-recaptcha-response'])) {
+                $reg_config = $this->modAuth->moduleConfig->recaptcha;
+                if ($reg_config && !empty($reg_config->secret)) {
+                    $client = new \GuzzleHttp\Client();
+                    $response = $client->request('POST', 'https://www.google.com/recaptcha/api/siteverify', [
+                        'form_params' => [
+                            'secret' => $reg_config->secret,
+                            'response' => $data['g-recaptcha-response']
+                        ]
+                    ]);
+                    if ($response) {
+                        if ($body = json_decode($response->getBody()->getContents(), true)) {
+                            if (!$body || !$body['success']) {
+                                $msg = "Ошибка. Попробуйте обновить страницу.";
+                                switch (current($body['error-codes'])) {
+                                    case 'missing-input-secret':
+                                        $msg = "Секретный параметр отсутствует.";
+                                        break;
+                                    case 'invalid-input-secret':
+                                        $msg = "Секретный параметр недействителен или имеет неправильный формат.";
+                                        break;
+                                    case 'missing-input-response':
+                                        $msg = "Параметр ответа отсутствует.";
+                                        break;
+                                    case 'invalid-input-response':
+                                        $msg = "Параметр ответа недействителен или имеет неправильный формат.";
+                                        break;
+                                    case 'bad-request':
+                                        $msg = "Запрос недействителен или имеет неверный формат.";
+                                        break;
+                                    case 'timeout-or-duplicate':
+                                        $msg = "Ответ больше недействителен: либо он слишком старый, либо использовался ранее.";
+                                        break;
+
+                                }
+                                throw new \Exception($msg, 400);
+                            }
+                        }
+
+                    }
+                }
+            }
+
             $this->emit('reg_data', $data);
         } catch (\Exception $e) {
             return json_encode([

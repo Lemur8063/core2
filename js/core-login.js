@@ -82,16 +82,15 @@ CoreLogin.authSocial = function (socialName, code) {
 /**
  * @param form
  */
-CoreLogin.registration = function (form) {
+CoreLogin.registration = function () {
 
     CoreLogin.loaderShow();
     $('.form-main .text-danger').text('');
-
     $.ajax({
         url: "index.php?core=registration",
         dataType: "json",
         method: "POST",
-        data: $(form).serialize()
+        data: $('.form-main')[0].serialize()
     })
         .done(function (data) {
             CoreLogin.loaderHide();

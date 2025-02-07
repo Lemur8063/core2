@@ -195,22 +195,30 @@ class Error {
 	    if (!$out) $out = [];
         if (!is_array($out)) $out = trim($out) ? ["msg" => $out] : [];
 
-		if ($code == 400) {
-			header("{$_SERVER['SERVER_PROTOCOL']} 400 Bad Request");
+        switch ($code) {
+            case 400:
+			    header("{$_SERVER['SERVER_PROTOCOL']} 400 Bad Request");
+                break;
+            case 403:
+			    header("{$_SERVER['SERVER_PROTOCOL']} 403 Forbidden");
+                break;
+            case 404:
+			    header("{$_SERVER['SERVER_PROTOCOL']} 404 Page not found");
+                break;
+            case 500:
+			    header("{$_SERVER['SERVER_PROTOCOL']} 500 Internal Server Error");
+                break;
+            case 503:
+			    header("{$_SERVER['SERVER_PROTOCOL']} 503 Service Unavailable");
+                break;
+            case 415:
+			    header("{$_SERVER['SERVER_PROTOCOL']} 415 Unsupported Media Type");
+                break;
+            case 405:
+			    header("{$_SERVER['SERVER_PROTOCOL']} 405 Method Not Allowed");
+                break;
 
-		} elseif ($code == 403) {
-			header("{$_SERVER['SERVER_PROTOCOL']} 403 Forbidden");
-
-		} elseif ($code == 404) {
-			header("{$_SERVER['SERVER_PROTOCOL']} 404 Page not found");
-
-		} elseif ($code == 500) {
-			header("{$_SERVER['SERVER_PROTOCOL']} 500 Internal Server Error");
-
-		} elseif ($code == 503) {
-			header("{$_SERVER['SERVER_PROTOCOL']} 503 Service Unavailable");
 		}
-
 
 		header('Content-type: application/json; charset="utf-8"');
 
