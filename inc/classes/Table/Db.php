@@ -800,6 +800,7 @@ class Db extends Table {
                                     $select->addWhere("{$filter_field} LIKE {$quoted_value}");
                                 }
                             }
+                            break;
 
                         case self::FILTER_MATCH:
                             if ($filter_value != '') {
