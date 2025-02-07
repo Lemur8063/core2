@@ -26,6 +26,7 @@ require_once("Theme.php");
 require_once 'Registry.php';
 require_once 'Config.php';
 require_once("HttpException.php");
+require_once("JsonException.php");
 
 use Laminas\Session\Config\SessionConfig;
 use Laminas\Session\SessionManager;
@@ -276,12 +277,17 @@ class Init extends Db {
         // Парсим маршрут
         $route = $this->routeParse();
         if (isset($route['api']) && !$this->auth) {
-            header('HTTP/1.1 401 Unauthorized');
-            $core_config = Registry::get('core_config');
-            if ($core_config->auth && $core_config->auth->scheme == 'basic') {
-                header("WWW-Authenticate: Basic realm={$core_config->auth->basic->realm}, charset=\"UTF-8\"");
+            if ($route['api'] == 'auth') {
+                //это запросы на регистрацию, восстановление пароля или OAUTH
+                return $this->dispatchApi();
+            } else {
+                header('HTTP/1.1 401 Unauthorized');
+                $core_config = Registry::get('core_config');
+                if ($core_config->auth && $core_config->auth->scheme == 'basic') {
+                    header("WWW-Authenticate: Basic realm={$core_config->auth->basic->realm}, charset=\"UTF-8\"");
+                }
+                return;
             }
-            return;
         }
 
         if (!empty($_POST)) {
@@ -433,14 +439,14 @@ class Init extends Db {
             return $this->getMenu();
         }
         else {
-
-            $module = !empty($route['api']) ? $route['api'] : $route['module'];
+            if (!empty($route['api'])) {
+                //---запрос от приложения
+                return $this->dispatchApi();
+            }
+            $module = $route['module'];
             $extension = strrpos($module, '.') ? substr($module, strrpos($module, '.')) : null;
             if ($extension) $module = substr($module, 0, strrpos($module, '.'));
             if ($module == 'index') $module = "admin";
-            if (empty($route['api']) && !empty($_GET['module'])) {
-                $module = $_GET['module'];
-            }
 
             if (!$module) throw new Exception($this->translate->tr("Модуль не найден"), 404);
             $action = $route['action'];
@@ -454,30 +460,8 @@ class Init extends Db {
                 if (!empty($this->auth->MOBILE)) {
                     require_once 'core2/inc/MobileController.php';
                     $core = new MobileController();
-                } else {
-                    if (!empty($route['api'])) {
-                        require_once 'core2/mod/admin/ModAdminApi.php';
-                        header('Content-type: application/json; charset="utf-8"');
-                        try {
-                            $coreController = new ModAdminApi();
-                            $action = "action_" . $action;
-                            if (method_exists($coreController, $action)) {
-                                $out = $coreController->$action();
-                                if (is_array($out)) $out = json_encode($out);
-                                return $out;
-                            } else {
-                                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
-                            }
-                        } catch (HttpException $e) {
-                            return Error::catchJsonException([
-                                'msg' => $e->getMessage(),
-                                'code' => $e->getErrorCode()
-                            ], $e->getCode() ?: 500);
-
-                        } catch (\Exception $e) {
-                            return Error::catchJsonException($e->getMessage(), $e->getCode());
-                        }
-                    }
+                }
+                else {
                     require_once 'core2/inc/CoreController.php';
                     $core = new CoreController();
                 }
@@ -493,33 +477,7 @@ class Init extends Db {
 
             }
             else {
-                if ($action == 'index') {
-                    $_GET['action'] = "index";
-
-                    if ( ! $this->isModuleActive($module)) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Модуль %s не существует"), $action), 404);
-                        throw new Exception(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
-                    }
-
-                    if ( ! $this->acl->checkAcl($module, 'access')) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
-                        throw new Exception(911);
-                    }
-                }
-                else {
-                    $submodule_id = $module . '_' . $action;
-                    if ( ! $this->isModuleActive($submodule_id)) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
-                        throw new Exception(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
-                    }
-                    $mods = $this->getSubModule($submodule_id);
-
-                    //TODO перенести проверку субмодуля в контроллер модуля
-                    if ($mods['sm_id'] && !$this->acl->checkAcl($submodule_id, 'access')) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
-                        throw new Exception(911);
-                    }
-                }
+                $this->checkModule($module, $action);
 
                 if (empty($mods['sm_path'])) {
                     $location = $this->getModuleLocation($module); //определяем местоположение модуля
@@ -538,36 +496,9 @@ class Init extends Db {
                     if ($this->translate->isSetup()) {
                         $this->translate->setupExtra($location, $module);
                     }
+                    $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
                     if (!empty($this->auth->MOBILE)) {
                         $modController = "Mobile" . ucfirst(strtolower($module)) . "Controller";
-                    }
-                    elseif (!empty($route['api'])) {
-                        //---запрос от приложения
-                        header('Content-type: application/json; charset="utf-8"');
-                        try {
-                            $modController = "Mod" . ucfirst(strtolower($module)) . "Api";
-                            $this->requireController($location, $modController);
-                            $modController = new $modController();
-                            $action = "action_" . $action;
-                            if (method_exists($modController, $action)) {
-                                $out = $modController->$action();
-                                if (is_array($out)) $out = json_encode($out);
-                                return $out;
-                            } else {
-                                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
-                            }
-                        } catch (HttpException $e) {
-                            return Error::catchJsonException([
-                                    'msg' => $e->getMessage(),
-                                    'code' => $e->getErrorCode()
-                                ], $e->getCode() ?: 500);
-
-                        } catch (\Exception $e) {
-                            return Error::catchJsonException($e->getMessage(), $e->getCode());
-                        }
-                    }
-                    else {
-                        $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
                     }
 
                     $this->requireController($location, $modController);
@@ -586,6 +517,78 @@ class Init extends Db {
             }
         }
         return '';
+    }
+
+    private function dispatchApi() {
+        header('Content-type: application/json; charset="utf-8"');
+        try {
+            $module = $this->route['api'];
+            $action = $this->route['action'];
+            $this->checkModule($module, $action);
+            $this->setContext($module, $action);
+            if ($this->route['api'] == 'admin') {
+                require_once 'core2/mod/admin/ModAdminApi.php';
+                $coreController = new ModAdminApi();
+                $action = "action_" . $action;
+                if (method_exists($coreController, $action)) {
+                    $out = $coreController->$action();
+                    if (is_array($out)) $out = json_encode($out);
+                    return $out;
+                } else {
+                    throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                }
+            }
+            $location = $this->getModuleLocation($module);
+            $modController = "Mod" . ucfirst(strtolower($module)) . "Api";
+            $this->requireController($location, $modController);
+            $modController = new $modController();
+            $action = "action_" . $action;
+            if (method_exists($modController, $action)) {
+                $out = $modController->$action();
+                if (is_array($out)) $out = json_encode($out);
+                return $out;
+            } else {
+                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+            }
+        } catch (HttpException $e) {
+            return Error::catchJsonException([
+                'msg' => $e->getMessage(),
+                'code' => $e->getErrorCode()
+            ], $e->getCode() ?: 500);
+
+        } catch (Exception $e) {
+            return Error::catchJsonException($e->getMessage(), $e->getCode());
+        }
+    }
+
+    private function checkModule($module, $action): void {
+        if ($action == 'index') {
+            $_GET['action'] = "index";
+
+            if ( ! $this->isModuleActive($module)) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Модуль %s не существует"), $action), 404);
+                throw new Exception(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
+            }
+
+            if ($this->acl && ! $this->acl->checkAcl($module, 'access')) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
+                throw new Exception(911);
+            }
+        }
+        else {
+            $submodule_id = $module . '_' . $action;
+            if ( ! $this->isModuleActive($submodule_id)) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
+                throw new Exception(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
+            }
+            $mods = $this->getSubModule($submodule_id);
+
+            //TODO перенести проверку субмодуля в контроллер модуля
+            if ($mods['sm_id'] && $this->acl && !$this->acl->checkAcl($submodule_id, 'access')) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
+                throw new Exception(911);
+            }
+        }
     }
 
 

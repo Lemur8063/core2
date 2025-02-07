@@ -20,7 +20,7 @@ CoreLogin.login = function (form) {
     }
     
     $.ajax({
-        url: "index.php?core=login",
+        url: "login",
         method: "POST",
         data: {
             login: $('[name=login]', form).val(),
@@ -87,7 +87,7 @@ CoreLogin.registration = function () {
     CoreLogin.loaderShow();
     $('.form-main .text-danger').text('');
     $.ajax({
-        url: "index.php?core=registration",
+        url: "auth/registration",
         dataType: "json",
         method: "POST",
         data: $('.form-main')[0].serialize()
@@ -132,7 +132,7 @@ CoreLogin.registrationComplete = function (form) {
     $('.form-main .text-danger').text('');
 
     $.ajax({
-        url: "index.php?core=registration_complete",
+        url: "auth/registration/complete",
         dataType: "json",
         method: "POST",
         data: {
@@ -165,7 +165,7 @@ CoreLogin.restore = function (form) {
     $('.form-main .text-danger').text('');
 
     $.ajax({
-        url: "index.php?core=restore",
+        url: "auth/restore",
         dataType: "json",
         method: "POST",
         data: $(form).serialize()
@@ -207,7 +207,7 @@ CoreLogin.restoreComplete = function (form) {
     $('.form-main .text-danger').text('');
 
     $.ajax({
-        url: "index.php?core=restore_complete",
+        url: "auth/restore/complete",
         dataType: "json",
         method: "POST",
         data: {
