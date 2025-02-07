@@ -69,7 +69,18 @@ class Error {
                 'code' => $exception->getErrorCode(),
             ]);
 
-        } else {
+        }
+        elseif ($exception instanceof JsonException) {
+            $code = $exception->getCode() ?: 500;
+            self::setResponseCode($code);
+            header('Content-type: application/json; charset="utf-8"');
+            echo json_encode([
+                'status'  => 'error',
+                'msg'  => $exception->getMessage(),
+            ]);
+
+        }
+        else {
             $cnf     = self::getConfig();
             $message = $exception->getMessage();
             $code    = $exception->getCode();
@@ -185,6 +196,34 @@ class Error {
 		self::Exception($message, $code);
 	}
 
+    private static function setResponseCode($code):void
+    {
+        switch ($code) {
+            case 400:
+                header("{$_SERVER['SERVER_PROTOCOL']} 400 Bad Request");
+                break;
+            case 403:
+                header("{$_SERVER['SERVER_PROTOCOL']} 403 Forbidden");
+                break;
+            case 404:
+                header("{$_SERVER['SERVER_PROTOCOL']} 404 Page not found");
+                break;
+            case 500:
+                header("{$_SERVER['SERVER_PROTOCOL']} 500 Internal Server Error");
+                break;
+            case 503:
+                header("{$_SERVER['SERVER_PROTOCOL']} 503 Service Unavailable");
+                break;
+            case 415:
+                header("{$_SERVER['SERVER_PROTOCOL']} 415 Unsupported Media Type");
+                break;
+            case 405:
+                header("{$_SERVER['SERVER_PROTOCOL']} 405 Method Not Allowed");
+                break;
+
+        }
+    }
+
     /**
      * @param array $out
      * @param int $code
@@ -195,30 +234,7 @@ class Error {
 	    if (!$out) $out = [];
         if (!is_array($out)) $out = trim($out) ? ["msg" => $out] : [];
 
-        switch ($code) {
-            case 400:
-			    header("{$_SERVER['SERVER_PROTOCOL']} 400 Bad Request");
-                break;
-            case 403:
-			    header("{$_SERVER['SERVER_PROTOCOL']} 403 Forbidden");
-                break;
-            case 404:
-			    header("{$_SERVER['SERVER_PROTOCOL']} 404 Page not found");
-                break;
-            case 500:
-			    header("{$_SERVER['SERVER_PROTOCOL']} 500 Internal Server Error");
-                break;
-            case 503:
-			    header("{$_SERVER['SERVER_PROTOCOL']} 503 Service Unavailable");
-                break;
-            case 415:
-			    header("{$_SERVER['SERVER_PROTOCOL']} 415 Unsupported Media Type");
-                break;
-            case 405:
-			    header("{$_SERVER['SERVER_PROTOCOL']} 405 Method Not Allowed");
-                break;
-
-		}
+        self::setResponseCode($code);
 
 		header('Content-type: application/json; charset="utf-8"');
 
