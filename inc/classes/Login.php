@@ -24,9 +24,36 @@ class Login extends \Common {
      * @throws \Zend_Exception
      * @throws \Exception
      */
-    public function dispatch(Array $request) {
+    public function dispatch(array $route) {
 
         //-------------регистрация, аутентификация через форму------------------
+        $uri = $route['module'];
+        parse_str($route['query'], $legacy);
+        if (isset($legacy['core'])) {
+            $uri = $legacy['core']; //FIXME DEPRECATED
+        }
+        if ($uri == 'registration') {
+            $auth = $this->isModuleInstalled('auth');
+            if (!$auth) {
+                throw new \Exception($this->_('Модуль регистрации не найден'), 404);
+            }
+            if (isset($auth['submodules']['registration']) && $auth['submodules']['registration']['visible'] !== 'Y') {
+                //субмдуль регистрациивыключен
+                throw new \Exception($this->_('Регистрация недоступна'), 403);
+            }
+        }
+        elseif ($uri == 'restore') {
+            $auth = $this->isModuleInstalled('auth');
+            if (!$auth) {
+                throw new \Exception($this->_('Модуль регистрации не найден'), 404);
+            }
+            if (isset($auth['submodules']['registration']) && $auth['submodules']['registration']['visible'] !== 'Y') {
+                //субмдуль регистрациивыключен
+                throw new \Exception($this->_('Регистрация недоступна'), 403);
+            }
+        } else {
+            return $this->getPageLogin();
+        }
 
         if (isset($request['core'])) {
             if ($this->config->mail && $this->config->mail->server) {
@@ -194,49 +221,49 @@ class Login extends \Common {
 
             if ($request['core'] == 'login') {
                 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (empty($_POST['login'])) {
-                        return json_encode([
-                            'status'  => 'error',
-                            'error_message' => $this->_('Заполните логин')
-                        ]);
-                    }
 
-                    if (empty($_POST['password'])) {
-                        return json_encode([
-                            'status'  => 'error',
-                            'error_message' => $this->_('Заполните пароль')
-                        ]);
-                    }
-
-                    try {
-                        $this->authLoginPassword($_POST["login"], $_POST['password']);
-
-                        return json_encode([
-                            'status' => 'success'
-                        ]);
-
-                    } catch (\Exception $e) {
-
-                        return json_encode([
-                            'status'        => 'error',
-                            'error_message' => $e->getMessage(),
-                        ]);
-                    }
                 }
             }
         }
 
-        // GET LOGIN PAGE
-        if ( ! empty($_POST['xjxr'])) {
-            throw new \Exception('expired');
-        }
-        if (array_key_exists('X-Requested-With', Tool::getRequestHeaders())) {
+    }
 
-            if ( ! empty($request['module'])) {
-                throw new \Exception('expired');
-            }
+    /**
+     * попытка входа в систему
+     * @param $login
+     * @param $password
+     * @return array|string[]
+     */
+    public function enter($login, $password):array
+    {
+        if (empty($login)) {
+            return [
+                'status'  => 'error',
+                'error_message' => $this->_('Заполните логин')
+            ];
         }
 
+        if (empty($password)) {
+            return [
+                'status'  => 'error',
+                'error_message' => $this->_('Заполните пароль')
+            ];
+        }
+
+        try {
+            $this->authLoginPassword($login, $password);
+
+            return [
+                'status' => 'success'
+            ];
+
+        } catch (\Exception $e) {
+
+            return [
+                'status'        => 'error',
+                'error_message' => $e->getMessage(),
+            ];
+        }
     }
 
 
@@ -274,7 +301,7 @@ class Login extends \Common {
      * @throws \Zend_Exception
      * @throws \Exception
      */
-    public function getPageLogin() {
+    private function getPageLogin() :string {
 
         $tpl  = new \Templater2(Theme::get("login"));
         $logo = $this->getSystemLogo();
@@ -283,69 +310,78 @@ class Login extends \Common {
             $tpl->logo->assign('{logo}', $logo);
         }
 
-        if ($this->isModuleInstalled('auth')) {
-            $auth_config = $this->modAuth->moduleConfig->auth;
-            $reg_config = $this->modAuth->moduleConfig->registration;
-            $restore_config = $this->modAuth->moduleConfig->restore;
+        if ($auth = $this->isModuleInstalled('auth')) {
+            if (isset($auth['submodules']['registration']) && $auth['submodules']['registration']['visible'] !== 'Y') {
+                //субмдуль регистрациивыключен
+            } else {
+                $auth_config = $this->modAuth->moduleConfig->auth;
+                $reg_config = $this->modAuth->moduleConfig->registration;
+                $restore_config = $this->modAuth->moduleConfig->restore;
 
-            if ($auth_config->ldap &&
-                $auth_config->ldap->on
-            ) {
-                $tpl->assign("id=\"gfhjkm", "id=\"gfhjkm\" data-ldap=\"1");
-            }
-
-            if ($auth_config->social) {
-                if ($auth_config->social->fb &&
-                    $auth_config->social->fb->on &&
-                    $auth_config->social->fb->app_id &&
-                    $auth_config->social->fb->api_secret &&
-                    $auth_config->social->fb->redirect_url
+                if ($auth_config->ldap &&
+                    $auth_config->ldap->on
                 ) {
-
-                    $tpl->social->fb->assign('[APP_ID]', $auth_config->social->fb->app_id);
-                    $tpl->social->fb->assign('[REDIRECT_URL]', $auth_config->social->fb->redirect_url);
+                    $tpl->assign("id=\"gfhjkm", "id=\"gfhjkm\" data-ldap=\"1");
                 }
 
-                if ($auth_config->social->ok &&
-                    $auth_config->social->ok->on &&
-                    $auth_config->social->ok->app_id &&
-                    $auth_config->social->ok->public_key &&
-                    $auth_config->social->ok->secret_key &&
-                    $auth_config->social->ok->redirect_url
-                ) {
+                if ($auth_config->social) {
+                    if ($auth_config->social->fb &&
+                        $auth_config->social->fb->on &&
+                        $auth_config->social->fb->app_id &&
+                        $auth_config->social->fb->api_secret &&
+                        $auth_config->social->fb->redirect_url
+                    ) {
 
-                    $tpl->social->ok->assign('[APP_ID]', $auth_config->social->ok->app_id);
-                    $tpl->social->ok->assign('[REDIRECT_URL]', $auth_config->social->ok->redirect_url);
+                        $tpl->social->fb->assign('[APP_ID]', $auth_config->social->fb->app_id);
+                        $tpl->social->fb->assign('[REDIRECT_URL]', $auth_config->social->fb->redirect_url);
+                    }
+
+                    if ($auth_config->social->ok &&
+                        $auth_config->social->ok->on &&
+                        $auth_config->social->ok->app_id &&
+                        $auth_config->social->ok->public_key &&
+                        $auth_config->social->ok->secret_key &&
+                        $auth_config->social->ok->redirect_url
+                    ) {
+
+                        $tpl->social->ok->assign('[APP_ID]', $auth_config->social->ok->app_id);
+                        $tpl->social->ok->assign('[REDIRECT_URL]', $auth_config->social->ok->redirect_url);
+                    }
+
+                    if ($auth_config->social->vk &&
+                        $auth_config->social->vk->on &&
+                        $auth_config->social->vk->app_id &&
+                        $auth_config->social->vk->api_secret &&
+                        $auth_config->social->vk->redirect_url
+                    ) {
+
+                        $tpl->social->vk->assign('[APP_ID]', $auth_config->social->vk->app_id);
+                        $tpl->social->vk->assign('[REDIRECT_URL]', $auth_config->social->vk->redirect_url);
+                    }
+
+                    if ($auth_config->social->google &&
+                        $auth_config->social->google->on
+                    ) {
+                        $tpl->social->google->assign('[OAUTH2]', $this->apiAuth->getAuthUrl('google'));
+                    }
                 }
 
-                if ($auth_config->social->vk &&
-                    $auth_config->social->vk->on &&
-                    $auth_config->social->vk->app_id &&
-                    $auth_config->social->vk->api_secret &&
-                    $auth_config->social->vk->redirect_url
-                ) {
+                if ($this->config->mail && $this->config->mail->server) {
+                    if ($reg_config &&
+                        $reg_config->on &&
+                        $reg_config->role_id
+                    ) {
+                        $tpl->ext_actions->touchBlock('registration');
+                    }
 
-                    $tpl->social->vk->assign('[APP_ID]', $auth_config->social->vk->app_id);
-                    $tpl->social->vk->assign('[REDIRECT_URL]', $auth_config->social->vk->redirect_url);
-                }
+                    if ($restore_config && $restore_config->on) {
+                        if (isset($auth['submodules']['restore']) && $auth['submodules']['restore']['visible'] !== 'Y') {
+                            //субмодуль восстановления пароля выключен
+                        } else {
+                            $tpl->ext_actions->touchBlock('restore');
+                        }
 
-                if ($auth_config->social->google &&
-                    $auth_config->social->google->on
-                ) {
-                    $tpl->social->google->assign('[OAUTH2]', $this->apiAuth->getAuthUrl('google'));
-                }
-            }
-
-            if ($this->config->mail && $this->config->mail->server) {
-                if ($reg_config &&
-                    $reg_config->on &&
-                    $reg_config->role_id
-                ) {
-                    $tpl->ext_actions->touchBlock('registration');
-                }
-
-                if ($restore_config && $restore_config->on) {
-                    $tpl->ext_actions->touchBlock('restore');
+                    }
                 }
             }
         }

@@ -409,15 +409,31 @@ class Init extends Db {
             $login->setFavicon($this->getSystemFavicon());
             $this->setupSkin();
             parse_str($route['query'], $request);
-            $response = $login->dispatch($request); //TODO переделать на API
-            if (!$response) {
-                //Immutable блокирует запись сессии
-                //SessionContainer::getDefaultManager()->getStorage()->markImmutable();
-                $response = $login->getPageLogin();
-                $blockNamespace = new SessionContainer('Block');
-                if (empty($blockNamespace->blocked)) {
-                    SessionContainer::getDefaultManager()->destroy();
+            if (array_key_exists('X-Requested-With', Tool::getRequestHeaders())) {
+                if ( ! empty($request['module'])) {
+                    throw new \Exception('expired');
                 }
+            }
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                if ( ! empty($_POST['xjxr'])) {
+                    throw new \Exception('expired');
+                }
+                $referer = parse_url($_SERVER['HTTP_REFERER']);
+                if ($referer['host'] !== $_SERVER['HTTP_HOST']) {
+                    http_response_code(400);
+                    throw new Exception('Referrer error');
+                }
+                if (isset($_POST['login']) && isset($_POST['password'])) {
+                    return json_encode($login->enter(trim($_POST['login']), trim($_POST['password'])));
+                }
+            }
+
+            //Immutable блокирует запись сессии
+            //SessionContainer::getDefaultManager()->getStorage()->markImmutable();
+            $response = $login->dispatch($this->route);
+            $blockNamespace = new SessionContainer('Block');
+            if (empty($blockNamespace->blocked)) {
+                SessionContainer::getDefaultManager()->destroy();
             }
             return $response;
         }

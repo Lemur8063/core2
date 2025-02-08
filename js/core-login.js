@@ -20,7 +20,7 @@ CoreLogin.login = function (form) {
     }
     
     $.ajax({
-        url: "login",
+        url: ".",
         method: "POST",
         data: {
             login: $('[name=login]', form).val(),
