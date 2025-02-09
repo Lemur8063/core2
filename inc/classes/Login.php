@@ -9,7 +9,7 @@ use Laminas\Session\Container as SessionContainer;
 /**
  * Class Login
  * @package Core2
- * @property \Users           $dataUsers
+ * @property Model\Users           $dataUsers
  */
 class Login extends \Common {
 
@@ -18,7 +18,7 @@ class Login extends \Common {
 
 
     /**
-     * @return false|string
+     * @return string
      * @throws \Zend_Db_Adapter_Exception
      * @throws \Zend_Db_Exception
      * @throws \Zend_Exception
@@ -83,104 +83,6 @@ class Login extends \Common {
         }
         else {
             return $this->getPageLogin();
-        }
-
-        if (isset($request['core'])) {
-            if ($this->config->mail && $this->config->mail->server) {
-
-                if ($this->isModuleInstalled('auth')) {
-                    $auth_config = $this->modAuth->moduleConfig->auth;
-                    $reg_config = $this->modAuth->moduleConfig->registration;
-                    $restore_config = $this->modAuth->moduleConfig->restore;
-
-                    if ($reg_config &&
-                        $reg_config->on &&
-                        $reg_config->role_id
-                    ) {
-
-
-                        if ($request['core'] == 'registration_complete') {
-                            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                                if (empty($request['key'])) {
-                                    http_response_code(404);
-                                    return '';
-                                }
-
-                                return $this->getPageRegistrationComplete($request['key']);
-
-                            } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                                if (empty($_POST['key'])) {
-                                    http_response_code(404);
-                                    return '';
-                                }
-                                if (empty($_POST['password'])) {
-                                    return json_encode([
-                                        'status' => 'error',
-                                        'error_message' => $this->_('Заполните пароль')
-                                    ]);
-                                }
-
-                                return $this->registrationComplete($_POST['key'], $_POST['password']);
-
-                            } else {
-                                http_response_code(404);
-                                return '';
-                            }
-                        }
-                    }
-
-                    if ($restore_config && $restore_config->on) {
-                        if ($request['core'] == 'restore') {
-                            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                                return $this->getPageRestore();
-
-                            } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                                if (empty($_POST['email'])) {
-                                    return json_encode([
-                                        'status' => 'error',
-                                        'error_message' => $this->_('Заполните email')
-                                    ]);
-                                }
-
-                                return $this->restore($_POST["email"]);
-
-                            } else {
-                                http_response_code(404);
-                                return '';
-                            }
-                        }
-
-
-                        if ($request['core'] == 'restore_complete') {
-                            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                                if (empty($request['key'])) {
-                                    http_response_code(404);
-                                    return '';
-                                }
-
-                                return $this->getPageRestoreComplete($request['key']);
-
-                            } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                                if (empty($_POST['key'])) {
-                                    http_response_code(404);
-                                    return '';
-                                }
-
-                                if (empty($_POST['password'])) {
-                                    return json_encode([
-                                        'status' => 'error',
-                                        'error_message' => $this->_('Заполните пароль')
-                                    ]);
-                                }
-
-                                return $this->restoreComplete($_POST['key'], $_POST['password']);
-                            }
-                        }
-                    }
-                }
-            }
-
-
         }
 
     }
