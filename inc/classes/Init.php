@@ -503,6 +503,7 @@ class Init extends Db {
                             header("Pragma: public");
                             header("Content-Type: text/javascript");
                             header("Content-length: " . filesize($location . "/serviceWorker.js"));
+                            header("X-Frame-Options: ALLOW-FROM https://web.telegram.org");
                             readfile($location . "/serviceWorker.js");
                             die;
                         } else {
@@ -577,17 +578,24 @@ class Init extends Db {
         }
     }
 
+    /**
+     * проверка модуля на доступность
+     * @param $module
+     * @param $action
+     * @return void
+     * @throws \Core2\JsonException
+     */
     private function checkModule($module, $action): void {
         if ($action == 'index') {
             $_GET['action'] = "index";
 
             if ( ! $this->isModuleActive($module)) {
-                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Модуль %s не существует"), $action), 404);
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
                 throw new Exception(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
             }
 
             if ($this->acl && ! $this->acl->checkAcl($module, 'access')) {
-                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $module), 403);
                 throw new Exception(911);
             }
         }
