@@ -124,7 +124,7 @@ class editTable extends initEdit {
 		$this->resource 		= $name;
 		$this->main_table_id 	= "main_" . $name;
 		$this->template 		= '<div id="' . $this->main_table_id . '_default">[default]</div>';
-		$this->uniq_class_id   	= $name; //crc32($name);
+		$this->uniq_class_id   	= $name;
 
 		global $counter;
 		$counter = 0;
@@ -1920,7 +1920,8 @@ class editTable extends initEdit {
                                     $controlGroups[$cellId]['html'][$key] .= $tpl;
                                 }
 
-                            } else {
+                            }
+                            else {
                                 foreach ($item_fields as $key_column => $option) {
                                     if ( ! empty($option['options'])) {
                                         $options = [];
@@ -2459,6 +2460,7 @@ $controlGroups[$cellId]['html'][$key] .= "
             $already_opened = $sess_form->{$this->uniq_class_id};
             //CUSTOM session fields
             if (!$refid) $refid = 0;
+            $refid .= "_" . crc32($_SERVER['REQUEST_URI']);
             $sess_data = isset($already_opened[$refid]) ? $already_opened[$refid] : [];
             if ($this->sess_form_custom) {
                 foreach ($this->sess_form_custom as $key => $item) {
@@ -2468,7 +2470,9 @@ $controlGroups[$cellId]['html'][$key] .= "
             }
             $already_opened[$refid] = $sess_data;
             //есль ли у юзера еще одна открытая эта же форма, то в сессии ничего не изменится
-            if ($already_opened) $sess_form->{$this->uniq_class_id} = $already_opened;
+            if ($already_opened) {
+                $sess_form->{$this->uniq_class_id} = $already_opened;
+            }
 
             $this->HTML .= $this->button($this->classText['SAVE'], "submit", "this.form.onsubmit();return false;", "button save");
 		}
