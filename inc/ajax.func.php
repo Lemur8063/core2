@@ -345,7 +345,8 @@ class ajaxFunc extends Common {
 	 * @return int|string
 	 * @throws Exception
 	 */
-	protected function saveData($data, $inTrans = true) {
+	protected function saveData(array $data, bool $inTrans = true) {
+
 		if ( ! $inTrans) {
 		    $this->db->beginTransaction();
         }
@@ -378,7 +379,10 @@ class ajaxFunc extends Common {
 			    throw new Exception("Ошибка обработки таблицы", 500);
             }
 
-			foreach ($data['control'] as $key => $value) {
+
+            $data['control'] = $this->clearData($data['control'], ['trim']);
+
+            foreach ($data['control'] as $key => $value) {
 				if ( ! is_array($value)) $value = trim((string)$value);
 				if (substr($key, -3) == '%re') continue;
 				if (substr($key, -4) == '%tru') continue;
@@ -756,6 +760,33 @@ class ajaxFunc extends Common {
 			$this->response->script($script);
 		}
 	}
+
+
+    /**
+     * Очистка данных
+     * @param array $data
+     * @param array $functions
+     * @return array
+     */
+    protected function clearData(array $data, array $functions = ['trim', 'strip_tags']): array {
+
+        foreach ($functions as $function) {
+            foreach ($data as $key => $item) {
+                if (is_string($item)) {
+                    $data[$key] = $function($item);
+
+                    if ($data[$key] !== '0' &&
+                        $data[$key] !== 0 &&
+                        empty($data[$key])
+                    ) {
+                        $data[$key] = null;
+                    }
+                }
+            }
+        }
+
+        return $data;
+    }
 
 
     /**
