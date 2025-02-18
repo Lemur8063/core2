@@ -774,13 +774,6 @@ class ajaxFunc extends Common {
             foreach ($data as $key => $item) {
                 if (is_string($item)) {
                     $data[$key] = $function($item);
-
-                    if ($data[$key] !== '0' &&
-                        $data[$key] !== 0 &&
-                        empty($data[$key])
-                    ) {
-                        $data[$key] = null;
-                    }
                 }
             }
         }
