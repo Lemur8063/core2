@@ -121,10 +121,9 @@ class editTable extends initEdit {
 	public function __construct($name) {
 
 		parent::__construct();
-		$this->resource 		= $name;
-		$this->main_table_id 	= "main_" . $name;
-		$this->template 		= '<div id="' . $this->main_table_id . '_default">[default]</div>';
-		$this->uniq_class_id   	= $name; //crc32($name);
+        $this->resource      = $name;
+        $this->main_table_id = "main_" . $name;
+        $this->template      = '<div id="' . $this->main_table_id . '_default">[default]</div>';
 
 		global $counter;
 		$counter = 0;
@@ -439,11 +438,14 @@ class editTable extends initEdit {
      * @SuppressWarnings(PHPMD:StaticAccess)
      */
 	public function makeTable() {
-		if (!$this->isSaved) {
-			$this->save('save.php');
-		}
+
+        if ( ! $this->isSaved) {
+            $this->save('save.php');
+        }
+
 		$authNamespace = new SessionContainer('Auth');
-		if (is_array($this->SQL)) {
+
+        if (is_array($this->SQL)) {
 			$arr = $this->SQL;
 			$current = current($arr);
 			if (!is_array($current)) {
@@ -468,6 +470,7 @@ class editTable extends initEdit {
 		}
 
 
+        $this->uniq_class_id = crc32($this->resource . $refid . json_encode($this->sess_form_custom));
 
 		if (!isset($arr_fields)) {
 			$tmp_pos = strripos($this->SQL, "FROM ");
@@ -2452,32 +2455,35 @@ $controlGroups[$cellId]['html'][$key] .= "
 			}
 		}
 
-		if (!$this->readOnly) {
-
-            $sess_form = new SessionContainer('Form');
-            //$this->uniq_class_id .= "|$refid";
+        if ( ! $this->readOnly) {
+            $sess_form      = new SessionContainer('Form');
             $already_opened = $sess_form->{$this->uniq_class_id};
-            //CUSTOM session fields
-            if (!$refid) $refid = 0;
-            $sess_data = isset($already_opened[$refid]) ? $already_opened[$refid] : [];
+
+            $refid = $refid ?: 0;
+
+            $sess_data = $already_opened[$refid] ?? [];
             if ($this->sess_form_custom) {
                 foreach ($this->sess_form_custom as $key => $item) {
-                    //TODO возможно надо добавить проверку того что мы вставляем в ссессию
                     $sess_data[$key] = $item;
                 }
             }
+
             $already_opened[$refid] = $sess_data;
+
             //есль ли у юзера еще одна открытая эта же форма, то в сессии ничего не изменится
-            if ($already_opened) $sess_form->{$this->uniq_class_id} = $already_opened;
+            if ($already_opened) {
+                $sess_form->{$this->uniq_class_id} = $already_opened;
+            }
 
             $this->HTML .= $this->button($this->classText['SAVE'], "submit", "this.form.onsubmit();return false;", "button save");
 		}
-		$this->HTML .= 	"</div></div>";
-		if (!$this->readOnly) {
-			$this->HTML .= 	"</form><script>function PrepareSave(){" . $PrepareSave . "} $onload </script>";
-		}
-		$this->HTML .= 	"</br>";
-	}
+
+        $this->HTML .= "</div></div>";
+        if ( ! $this->readOnly) {
+            $this->HTML .= "</form><script>function PrepareSave(){" . $PrepareSave . "} $onload </script>";
+        }
+        $this->HTML .= "</br>";
+    }
 
 
     /**

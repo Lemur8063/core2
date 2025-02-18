@@ -73,6 +73,17 @@ class Db {
 //            if ($reg->isRegistered('invoker')) {
 //                $k_module = $k . "|" . $reg->get('invoker');
 //            }
+            if (!$reg->isRegistered('db|admin')) {
+                //подключение к базе по умолчанию (выполняется 1 раз)
+
+                $db = $this->establishConnection($this->config->database);
+                if (!$db) {
+                    throw new \Exception("Daabase not connected");
+                }
+                \Zend_Db_Table::setDefaultAdapter($db);
+                $reg->set('db|admin', $db);
+            }
+
             if (!$reg->isRegistered($k_module)) {
                 if (!$this->config) $this->config = $reg->get('config');
                 if (!$this->_core_config) $this->_core_config = $reg->get('core_config');
@@ -93,13 +104,9 @@ class Db {
                         }
                     }
                 }
-                //подключение к базе по умолчанию (выполняется 1 раз)
-                $db = $this->establishConnection($this->config->database);
-                \Zend_Db_Table::setDefaultAdapter($db);
-                $reg->set('db|admin', $db);
 
             }
-			$db = $reg->get($k_module);
+            $db = $reg->get($k_module);
             if ($db === 'db') $db = $reg->get('db|admin');
 			return $db;
 		}

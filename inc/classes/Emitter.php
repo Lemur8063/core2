@@ -59,7 +59,7 @@ class Emitter extends Db {
             $res = $controller->listen($module, $event_name, $data);
             if ($res) $out[$mod] = $res;
         }
-        $this->log->info($data, ['module' => $module, 'event' => $event_name]);
+//        $this->log->info(is_array($data) ? json_encode($data) : $data, ['module' => $module, 'event' => $event_name]);
         return $out;
     }
 
