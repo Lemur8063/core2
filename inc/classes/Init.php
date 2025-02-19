@@ -494,43 +494,45 @@ class Init extends Db {
             }
             else {
                 $this->checkModule($module, $action);
+                $location = $this->getModuleLocation($module); //определяем местоположение модуля
 
-                if (empty($mods['sm_path'])) {
-                    $location = $this->getModuleLocation($module); //определяем местоположение модуля
-                    if ($extension == ".sw") {
-                        //модуль хочет serviceWorker
-                        if (file_exists($location . "/serviceWorker.js")) {
-                            header("Pragma: public");
-                            header("Content-Type: text/javascript");
-                            header("Content-length: " . filesize($location . "/serviceWorker.js"));
-                            header("X-Frame-Options: ALLOW-FROM https://web.telegram.org");
-                            readfile($location . "/serviceWorker.js");
-                            die;
-                        } else {
-                            Error::Exception("File not found", 404);
-                        }
-                    }
-                    if ($this->translate->isSetup()) {
-                        $this->translate->setupExtra($location, $module);
-                    }
-                    $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
-                    if (!empty($this->auth->MOBILE)) {
-                        $modController = "Mobile" . ucfirst(strtolower($module)) . "Controller";
-                    }
-
-                    $this->requireController($location, $modController);
-                    $modController = new $modController();
-                    $action = "action_" . $action;
-                    if (method_exists($modController, $action)) {
-                        $out = $modController->$action();
-                        return $out;
-                    } else {
-                        throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
-                    }
-                }
-                else {
+                $mods = $this->getSubModule($module . '_' . $action);
+                if (!empty($mods['sm_path'])) {
+                    if (file_exists($location . "/" . $mods['sm_path']))
+                        return "<script>loadExt('{$this->getModuleSrc($module)}/{$mods['sm_path']}')</script>";
                     return "<script>loadExt('{$mods['sm_path']}')</script>";
                 }
+
+                if ($extension == ".sw") {
+                    //модуль хочет serviceWorker
+                    if (file_exists($location . "/serviceWorker.js")) {
+                        header("Pragma: public");
+                        header("Content-Type: text/javascript");
+                        header("Content-length: " . filesize($location . "/serviceWorker.js"));
+                        readfile($location . "/serviceWorker.js");
+                        die;
+                    } else {
+                        Error::Exception("File not found", 404);
+                    }
+                }
+                if ($this->translate->isSetup()) {
+                    $this->translate->setupExtra($location, $module);
+                }
+                $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
+                if (!empty($this->auth->MOBILE)) {
+                    $modController = "Mobile" . ucfirst(strtolower($module)) . "Controller";
+                }
+
+                $this->requireController($location, $modController);
+                $modController = new $modController();
+                $action = "action_" . $action;
+                if (method_exists($modController, $action)) {
+                    $out = $modController->$action();
+                    return $out;
+                } else {
+                    throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                }
+
             }
         }
         return '';
