@@ -1,14 +1,14 @@
 <?php
-require_once("core2/inc/ajax.func.php");
+require_once "core2/inc/ajax.func.php";
+require_once "classes/users/Users.php";
 
 use Laminas\Session\Container as SessionContainer;
 use Core2\Registry;
 use Core2\Tool;
+use Core2\Mod\Admin;
 
 /**
- * Class ModAjax
- * @property UsersProfile $dataUsersProfile
- * @property Users        $dataUsers
+ *
  */
 class ModAjax extends ajaxFunc {
 
@@ -558,36 +558,16 @@ class ModAjax extends ajaxFunc {
 
             // Получение данных из сертификата
             if (isset($data['certificate_parse']) && $data['certificate_parse'] == 'Y') {
-                $x509 = new \phpseclib\File\X509();
-                $x509->loadX509($dataForSave['certificate']);
+                $cert = (new Admin\Users\Users())->parseCert($dataForSave['certificate']);
 
-                $subject = $x509->getSubjectDN();
-
-                if ( ! empty($subject) && ! empty($subject['rdnSequence'])) {
-                    foreach ($subject['rdnSequence'] as $items) {
-
-                        if ( ! empty($items[0]) && ! empty($items[0]['type'])) {
-                            $value = current($items[0]['value']);
-
-                            switch ($items[0]['type']) {
-                                case 'id-at-surname':
-                                    $data['control']['lastname'] = ! empty($value) ? $value : $data['control']['lastname'];
-                                    break;
-
-                                case 'id-at-name':
-                                    $value_explode = explode(' ', $value, 2);
-
-                                    $data['control']['firstname']  = ! empty($value_explode[0])
-                                        ? $value_explode[0]
-                                        : $data['control']['firstname'];
-
-                                    $data['control']['middlename'] = ! empty($value_explode[1])
-                                        ? $value_explode[1]
-                                        : $data['control']['middlename'];
-                                    break;
-                            }
-                        }
-                    }
+                if ( ! empty($cert['lastname'])) {
+                    $data['control']['lastname'] = $cert['lastname'];
+                }
+                if ( ! empty($cert['firstname'])) {
+                    $data['control']['firstname'] = $cert['firstname'];
+                }
+                if ( ! empty($cert['middlename'])) {
+                    $data['control']['middlename'] = $cert['middlename'];
                 }
             }
         }
@@ -660,17 +640,17 @@ class ModAjax extends ajaxFunc {
                     'lastuser'   => $authNamespace->ID > 0 ? $authNamespace->ID : new \Zend_Db_Expr('NULL')
                 ];
 
-                $row  = $this->dataUsersProfile->fetchRow(
-                    $this->dataUsersProfile->select()->where("user_id = ?", $refid)->limit(1)
+                $row  = $this->modAdmin->dataUsersProfile->fetchRow(
+                    $this->modAdmin->dataUsersProfile->select()->where("user_id = ?", $refid)->limit(1)
                 );
 
                 if ( ! $row) {
-                    $row = $this->dataUsersProfile->createRow();
+                    $row = $this->modAdmin->dataUsersProfile->createRow();
                     $save['user_id'] = $refid;
                     $event = 'user_new';
                 } else {
-                    $data['control']['u_login'] = $this->dataUsers->fetchRow(
-                        $this->dataUsers->select()->where("u_id = ?", $refid)->limit(1)
+                    $data['control']['u_login'] = $this->modAdmin->dataUsers->fetchRow(
+                        $this->modAdmin->dataUsers->select()->where("u_id = ?", $refid)->limit(1)
                     )->u_login;
                     $event = 'user_update';
                 }
