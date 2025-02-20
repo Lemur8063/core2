@@ -45,6 +45,7 @@
     "guzzlehttp/guzzle": "7.8.1",
     "phpseclib/phpseclib": "~2.0",
     "zircote/swagger-php": "4.10.6",
+    "genkgo/mail": "2.12.4",
     "ext-json": "*",
     "ext-zip": "*",
     "ext-mbstring": "*",
