@@ -15,5 +15,5 @@ interface File {
      *
      * @return bool
      */
-    public function action_filehandler($context, $table, $id);
+    public function action_filehandler($context, $table, int $id);
 }

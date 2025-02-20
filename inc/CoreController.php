@@ -664,7 +664,7 @@ class CoreController extends Common implements File {
      * @param $id - id файла
      * @return bool
      */
-    public function action_filehandler($context, $table, $id) {
+    public function action_filehandler($context, $table, int $id) {
 
         // Используется для случая когда не нужно получать список уже загруженных файлов
         if ($table == 'core_users') {

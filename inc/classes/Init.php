@@ -51,7 +51,7 @@ $conf_file = DOC_ROOT . "conf.ini";
 if (!file_exists($conf_file)) {
     Error::Exception("conf.ini is missing.", 404);
 }
-$config = [
+$config_origin = [
     'system'       => ['name' => 'CORE2'],
     'include_path' => '',
     'temp'         => getenv('TMP'),
@@ -84,10 +84,10 @@ $config = [
     ],
 ];
 // определяем путь к темповой папке
-if (empty($config['temp'])) {
-    $config['temp'] = sys_get_temp_dir();
+if (empty($config_origin['temp'])) {
+    $config_origin['temp'] = sys_get_temp_dir();
     if (empty($config['temp'])) {
-        $config['temp'] = "/tmp";
+        $config_origin['temp'] = "/tmp";
     }
 }
 
@@ -96,11 +96,11 @@ try {
 
     $section = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'production';
 
-    $conf     = new Core2\Config($config);
+    $conf     = new Core2\Config($config_origin);
     $config   = $conf->getData()->merge($conf->readIni($conf_file, $section));
 
 
-    $conf_d = DOC_ROOT . "conf.ext.ini";
+    $conf_d = __DIR__ . "/../../conf.ext.ini";
     if (file_exists($conf_d)) {
         $config->merge($conf->readIni($conf_d, $section));
     }
@@ -115,6 +115,7 @@ try {
     if (!empty($tz)) {
         date_default_timezone_set($tz);
     }
+    if (!$config) throw new Exception("Unable to load configuration.");
 }
 catch (Exception $e) {
     Error::Exception($e->getMessage());
@@ -1350,7 +1351,7 @@ class Init extends Db {
                 $this->requireController($location, $modController);
                 $modController  = new $modController();
                 if ($modController instanceof File) {
-                    $res = $modController->action_filehandler($context, $table, $id);
+                    $res = $modController->action_filehandler($context, $table, (int) $id);
                     if ($res) {
                         return true;
                     }
