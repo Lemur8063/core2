@@ -965,12 +965,12 @@ class ajaxFunc extends Common {
 
         if (empty($this->orderFields)) {
             $sess_form = new SessionContainer('Form');
-            if (!$sess_form || !$id || empty($sess_form->$id)) {
-                return array();
+            if ( ! $sess_form || ! $id || empty($sess_form->$id)) {
+                return [];
             }
-            $all_forms = $sess_form->$id;
-            $key   	= $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
-            $this->orderFields = isset($all_forms[$key]) ? $all_forms[$key] : [];
+            $all_forms         = $sess_form->$id;
+            $key               = $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
+            $this->orderFields = $all_forms[$key] ?? [];
         }
         return $this->orderFields;
     }
