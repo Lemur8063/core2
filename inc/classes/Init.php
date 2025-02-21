@@ -26,6 +26,7 @@ require_once("Theme.php");
 require_once 'Registry.php';
 require_once 'Config.php';
 require_once("HttpException.php");
+require_once("JsonException.php");
 
 use Laminas\Session\Config\SessionConfig;
 use Laminas\Session\SessionManager;
@@ -50,7 +51,7 @@ $conf_file = DOC_ROOT . "conf.ini";
 if (!file_exists($conf_file)) {
     Error::Exception("conf.ini is missing.", 404);
 }
-$config = [
+$config_origin = [
     'system'       => ['name' => 'CORE2'],
     'include_path' => '',
     'temp'         => getenv('TMP'),
@@ -83,10 +84,10 @@ $config = [
     ],
 ];
 // определяем путь к темповой папке
-if (empty($config['temp'])) {
-    $config['temp'] = sys_get_temp_dir();
+if (empty($config_origin['temp'])) {
+    $config_origin['temp'] = sys_get_temp_dir();
     if (empty($config['temp'])) {
-        $config['temp'] = "/tmp";
+        $config_origin['temp'] = "/tmp";
     }
 }
 
@@ -95,11 +96,11 @@ try {
 
     $section = !empty($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'production';
 
-    $conf     = new Core2\Config($config);
+    $conf     = new Core2\Config($config_origin);
     $config   = $conf->getData()->merge($conf->readIni($conf_file, $section));
 
 
-    $conf_d = DOC_ROOT . "conf.ext.ini";
+    $conf_d = __DIR__ . "/../../conf.ext.ini";
     if (file_exists($conf_d)) {
         $config->merge($conf->readIni($conf_d, $section));
     }
@@ -114,6 +115,7 @@ try {
     if (!empty($tz)) {
         date_default_timezone_set($tz);
     }
+    if (!$config) throw new Exception("Unable to load configuration.");
 }
 catch (Exception $e) {
     Error::Exception($e->getMessage());
@@ -276,12 +278,17 @@ class Init extends Db {
         // Парсим маршрут
         $route = $this->routeParse();
         if (isset($route['api']) && !$this->auth) {
-            header('HTTP/1.1 401 Unauthorized');
-            $core_config = Registry::get('core_config');
-            if ($core_config->auth && $core_config->auth->scheme == 'basic') {
-                header("WWW-Authenticate: Basic realm={$core_config->auth->basic->realm}, charset=\"UTF-8\"");
+            if ($route['api'] == 'auth') {
+                //это запросы на регистрацию, восстановление пароля или OAUTH
+                return $this->dispatchApi();
+            } else {
+                header('HTTP/1.1 401 Unauthorized');
+                $core_config = Registry::get('core_config');
+                if ($core_config->auth && $core_config->auth->scheme == 'basic') {
+                    header("WWW-Authenticate: Basic realm={$core_config->auth->basic->realm}, charset=\"UTF-8\"");
+                }
+                return;
             }
-            return;
         }
 
         if (!empty($_POST)) {
@@ -403,15 +410,31 @@ class Init extends Db {
             $login->setFavicon($this->getSystemFavicon());
             $this->setupSkin();
             parse_str($route['query'], $request);
-            $response = $login->dispatch($request); //TODO переделать на API
-            if (!$response) {
-                //Immutable блокирует запись сессии
-                //SessionContainer::getDefaultManager()->getStorage()->markImmutable();
-                $response = $login->getPageLogin();
-                $blockNamespace = new SessionContainer('Block');
-                if (empty($blockNamespace->blocked)) {
-                    SessionContainer::getDefaultManager()->destroy();
+            if (array_key_exists('X-Requested-With', Tool::getRequestHeaders())) {
+                if ( ! empty($request['module'])) {
+                    throw new \Exception('expired');
                 }
+            }
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                if ( ! empty($_POST['xjxr'])) {
+                    throw new \Exception('expired');
+                }
+                $referer = parse_url($_SERVER['HTTP_REFERER']);
+                if ($referer['host'] !== $_SERVER['HTTP_HOST']) {
+                    http_response_code(400);
+                    throw new Exception('Referrer error');
+                }
+                if (isset($_POST['login']) && isset($_POST['password'])) {
+                    return json_encode($login->enter(trim($_POST['login']), trim($_POST['password'])));
+                }
+            }
+
+            //Immutable блокирует запись сессии
+            //SessionContainer::getDefaultManager()->getStorage()->markImmutable();
+            $response = $login->dispatch($this->route);
+            $blockNamespace = new SessionContainer('Block');
+            if (empty($blockNamespace->blocked)) {
+                SessionContainer::getDefaultManager()->destroy();
             }
             return $response;
         }
@@ -433,14 +456,14 @@ class Init extends Db {
             return $this->getMenu();
         }
         else {
-
-            $module = !empty($route['api']) ? $route['api'] : $route['module'];
+            if (!empty($route['api'])) {
+                //---запрос от приложения
+                return $this->dispatchApi();
+            }
+            $module = $route['module'];
             $extension = strrpos($module, '.') ? substr($module, strrpos($module, '.')) : null;
             if ($extension) $module = substr($module, 0, strrpos($module, '.'));
             if ($module == 'index') $module = "admin";
-            if (empty($route['api']) && !empty($_GET['module'])) {
-                $module = $_GET['module'];
-            }
 
             if (!$module) throw new Exception($this->translate->tr("Модуль не найден"), 404);
             $action = $route['action'];
@@ -454,30 +477,8 @@ class Init extends Db {
                 if (!empty($this->auth->MOBILE)) {
                     require_once 'core2/inc/MobileController.php';
                     $core = new MobileController();
-                } else {
-                    if (!empty($route['api'])) {
-                        require_once 'core2/mod/admin/ModAdminApi.php';
-                        header('Content-type: application/json; charset="utf-8"');
-                        try {
-                            $coreController = new ModAdminApi();
-                            $action = "action_" . $action;
-                            if (method_exists($coreController, $action)) {
-                                $out = $coreController->$action();
-                                if (is_array($out)) $out = json_encode($out);
-                                return $out;
-                            } else {
-                                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
-                            }
-                        } catch (HttpException $e) {
-                            return Error::catchJsonException([
-                                'msg' => $e->getMessage(),
-                                'code' => $e->getErrorCode()
-                            ], $e->getCode() ?: 500);
-
-                        } catch (\Exception $e) {
-                            return Error::catchJsonException($e->getMessage(), $e->getCode());
-                        }
-                    }
+                }
+                else {
                     require_once 'core2/inc/CoreController.php';
                     $core = new CoreController();
                 }
@@ -493,99 +494,128 @@ class Init extends Db {
 
             }
             else {
-                if ($action == 'index') {
-                    $_GET['action'] = "index";
+                $this->checkModule($module, $action);
+                $location = $this->getModuleLocation($module); //определяем местоположение модуля
 
-                    if ( ! $this->isModuleActive($module)) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Модуль %s не существует"), $action), 404);
-                        throw new Exception(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
-                    }
-
-                    if ( ! $this->acl->checkAcl($module, 'access')) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
-                        throw new Exception(911);
-                    }
-                }
-                else {
-                    $submodule_id = $module . '_' . $action;
-                    if ( ! $this->isModuleActive($submodule_id)) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
-                        throw new Exception(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
-                    }
-                    $mods = $this->getSubModule($submodule_id);
-
-                    //TODO перенести проверку субмодуля в контроллер модуля
-                    if ($mods['sm_id'] && !$this->acl->checkAcl($submodule_id, 'access')) {
-                        if (!empty($route['api'])) return Error::catchJsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
-                        throw new Exception(911);
-                    }
-                }
-
-                if (empty($mods['sm_path'])) {
-                    $location = $this->getModuleLocation($module); //определяем местоположение модуля
-                    if ($extension == ".sw") {
-                        //модуль хочет serviceWorker
-                        if (file_exists($location . "/serviceWorker.js")) {
-                            header("Pragma: public");
-                            header("Content-Type: text/javascript");
-                            header("Content-length: " . filesize($location . "/serviceWorker.js"));
-                            readfile($location . "/serviceWorker.js");
-                            die;
-                        } else {
-                            Error::Exception("File not found", 404);
-                        }
-                    }
-                    if ($this->translate->isSetup()) {
-                        $this->translate->setupExtra($location, $module);
-                    }
-                    if (!empty($this->auth->MOBILE)) {
-                        $modController = "Mobile" . ucfirst(strtolower($module)) . "Controller";
-                    }
-                    elseif (!empty($route['api'])) {
-                        //---запрос от приложения
-                        header('Content-type: application/json; charset="utf-8"');
-                        try {
-                            $modController = "Mod" . ucfirst(strtolower($module)) . "Api";
-                            $this->requireController($location, $modController);
-                            $modController = new $modController();
-                            $action = "action_" . $action;
-                            if (method_exists($modController, $action)) {
-                                $out = $modController->$action();
-                                if (is_array($out)) $out = json_encode($out);
-                                return $out;
-                            } else {
-                                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
-                            }
-                        } catch (HttpException $e) {
-                            return Error::catchJsonException([
-                                    'msg' => $e->getMessage(),
-                                    'code' => $e->getErrorCode()
-                                ], $e->getCode() ?: 500);
-
-                        } catch (\Exception $e) {
-                            return Error::catchJsonException($e->getMessage(), $e->getCode());
-                        }
-                    }
-                    else {
-                        $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
-                    }
-
-                    $this->requireController($location, $modController);
-                    $modController = new $modController();
-                    $action = "action_" . $action;
-                    if (method_exists($modController, $action)) {
-                        $out = $modController->$action();
-                        return $out;
-                    } else {
-                        throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
-                    }
-                }
-                else {
+                $mods = $this->getSubModule($module . '_' . $action);
+                if (!empty($mods['sm_path'])) {
+                    if (file_exists($location . "/" . $mods['sm_path']))
+                        return "<script>loadExt('{$this->getModuleSrc($module)}/{$mods['sm_path']}')</script>";
                     return "<script>loadExt('{$mods['sm_path']}')</script>";
                 }
+
+                if ($extension == ".sw") {
+                    //модуль хочет serviceWorker
+                    if (file_exists($location . "/serviceWorker.js")) {
+                        header("Pragma: public");
+                        header("Content-Type: text/javascript");
+                        header("Content-length: " . filesize($location . "/serviceWorker.js"));
+                        readfile($location . "/serviceWorker.js");
+                        die;
+                    } else {
+                        Error::Exception("File not found", 404);
+                    }
+                }
+                if ($this->translate->isSetup()) {
+                    $this->translate->setupExtra($location, $module);
+                }
+                $modController = "Mod" . ucfirst(strtolower($module)) . "Controller";
+                if (!empty($this->auth->MOBILE)) {
+                    $modController = "Mobile" . ucfirst(strtolower($module)) . "Controller";
+                }
+
+                $this->requireController($location, $modController);
+                $modController = new $modController();
+                $action = "action_" . $action;
+                if (method_exists($modController, $action)) {
+                    $out = $modController->$action();
+                    return $out;
+                } else {
+                    throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                }
+
             }
         }
         return '';
+    }
+
+    private function dispatchApi() {
+        header('Content-type: application/json; charset="utf-8"');
+        try {
+            $module = $this->route['api'];
+            $action = $this->route['action'];
+            $this->checkModule($module, $action);
+            $this->setContext($module, $action);
+            if ($this->route['api'] == 'admin') {
+                require_once 'core2/mod/admin/ModAdminApi.php';
+                $coreController = new ModAdminApi();
+                $action = "action_" . $action;
+                if (method_exists($coreController, $action)) {
+                    $out = $coreController->$action();
+                    if (is_array($out)) $out = json_encode($out);
+                    return $out;
+                } else {
+                    throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                }
+            }
+            $location = $this->getModuleLocation($module);
+            $modController = "Mod" . ucfirst(strtolower($module)) . "Api";
+            $this->requireController($location, $modController);
+            $modController = new $modController();
+            $action = "action_" . $action;
+            if (method_exists($modController, $action)) {
+                $out = $modController->$action();
+                if (is_array($out)) $out = json_encode($out);
+                return $out;
+            } else {
+                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+            }
+        } catch (HttpException $e) {
+            return Error::catchJsonException([
+                'msg' => $e->getMessage(),
+                'code' => $e->getErrorCode()
+            ], $e->getCode() ?: 500);
+
+        } catch (Exception $e) {
+            return Error::catchJsonException($e->getMessage(), $e->getCode());
+        }
+    }
+
+    /**
+     * проверка модуля на доступность
+     * @param $module
+     * @param $action
+     * @return void
+     * @throws \Core2\JsonException
+     */
+    private function checkModule($module, $action): void {
+        if ($action == 'index') {
+            $_GET['action'] = "index";
+
+            if ( ! $this->isModuleActive($module)) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
+                throw new Exception(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
+            }
+
+            if ($this->acl && ! $this->acl->checkAcl($module, 'access')) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $module), 403);
+                throw new Exception(911);
+            }
+        }
+        else {
+            $submodule_id = $module . '_' . $action;
+            if ( ! $this->isModuleActive($submodule_id)) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
+                throw new Exception(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
+            }
+            $mods = $this->getSubModule($submodule_id);
+
+            //TODO перенести проверку субмодуля в контроллер модуля
+            if ($mods['sm_id'] && $this->acl && !$this->acl->checkAcl($submodule_id, 'access')) {
+                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
+                throw new Exception(911);
+            }
+        }
     }
 
 
@@ -1321,7 +1351,7 @@ class Init extends Db {
                 $this->requireController($location, $modController);
                 $modController  = new $modController();
                 if ($modController instanceof File) {
-                    $res = $modController->action_filehandler($context, $table, $id);
+                    $res = $modController->action_filehandler($context, $table, (int) $id);
                     if ($res) {
                         return true;
                     }

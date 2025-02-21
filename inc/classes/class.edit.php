@@ -120,10 +120,11 @@ class editTable extends initEdit {
      */
 	public function __construct($name) {
 
-		parent::__construct();
+        parent::__construct();
         $this->resource      = $name;
         $this->main_table_id = "main_" . $name;
         $this->template      = '<div id="' . $this->main_table_id . '_default">[default]</div>';
+        $this->uniq_class_id = $name;
 
 		global $counter;
 		$counter = 0;
@@ -470,7 +471,6 @@ class editTable extends initEdit {
 		}
 
 
-        $this->uniq_class_id = crc32($this->resource . $refid . json_encode($this->sess_form_custom));
 
 		if (!isset($arr_fields)) {
 			$tmp_pos = strripos($this->SQL, "FROM ");
@@ -1923,7 +1923,8 @@ class editTable extends initEdit {
                                     $controlGroups[$cellId]['html'][$key] .= $tpl;
                                 }
 
-                            } else {
+                            }
+                            else {
                                 foreach ($item_fields as $key_column => $option) {
                                     if ( ! empty($option['options'])) {
                                         $options = [];
@@ -2458,10 +2459,11 @@ $controlGroups[$cellId]['html'][$key] .= "
         if ( ! $this->readOnly) {
             $sess_form      = new SessionContainer('Form');
             $already_opened = $sess_form->{$this->uniq_class_id};
-
-            $refid = $refid ?: 0;
-
+            //CUSTOM session fields
+            $refid     = $refid ?: 0;
+            $refid    .= "_" . crc32($_SERVER['REQUEST_URI']);
             $sess_data = $already_opened[$refid] ?? [];
+
             if ($this->sess_form_custom) {
                 foreach ($this->sess_form_custom as $key => $item) {
                     $sess_data[$key] = $item;

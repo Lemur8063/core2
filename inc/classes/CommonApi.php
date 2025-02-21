@@ -107,6 +107,9 @@ class CommonApi extends \Core2\Acl {
                     return new stdObject();
 
                 } else {
+                    if (!$this->isModuleActive($module)) {
+                        return new stdObject();
+                    }
                     $autoload_file = $location . "/vendor/autoload.php";
 
                     if (file_exists($autoload_file)) {
@@ -187,6 +190,9 @@ class CommonApi extends \Core2\Acl {
                 }
                 else if (strpos($h['Content-Type'], 'application/json') === 0) {
                     $request_raw = json_decode($request_raw, true);
+                    if (\JSON_ERROR_NONE !== json_last_error()) {
+                        throw new \InvalidArgumentException(json_last_error_msg(), 400);
+                    }
                 }
                 else {
                     throw new \Exception('Unsupported Media Type', 415);
@@ -200,6 +206,9 @@ class CommonApi extends \Core2\Acl {
                         parse_str($request_raw, $request_raw);
                     } else if (strpos($h['Content-Type'], 'application/json') === 0) {
                         $request_raw = json_decode($request_raw, true);
+                        if (\JSON_ERROR_NONE !== json_last_error()) {
+                            throw new \InvalidArgumentException(json_last_error_msg(), 400);
+                        }
                     }
                 }
                 break;

@@ -69,7 +69,18 @@ class Db {
             if (!$this->_core_config) $this->_core_config = $reg->get('core_config');
             return $this->_core_config;
         }
-		if ($k == 'db') {
+		if ($k === 'db2') {
+            if (!$reg->isRegistered('db2')) {
+                $db = $this->establishConnection($this->config->database2);
+                if (!$db) {
+                    throw new \Exception("Database replica not connected");
+                }
+                $reg->set('db2', $db);
+            }
+            $db = $reg->get('db2');
+            return $db;
+        }
+		if ($k === 'db') {
 //            if ($reg->isRegistered('invoker')) {
 //                $k_module = $k . "|" . $reg->get('invoker');
 //            }
@@ -78,7 +89,7 @@ class Db {
 
                 $db = $this->establishConnection($this->config->database);
                 if (!$db) {
-                    throw new \Exception("Daabase not connected");
+                    throw new \Exception("Database not connected");
                 }
                 \Zend_Db_Table::setDefaultAdapter($db);
                 $reg->set('db|admin', $db);

@@ -759,6 +759,7 @@ class ajaxFunc extends Common {
 
 			$this->response->script($script);
 		}
+        $this->clearSessForm($data['class_id']);
 	}
 
 
@@ -968,8 +969,27 @@ class ajaxFunc extends Common {
                 return array();
             }
             $all_forms = $sess_form->$id;
-            $this->orderFields = isset($all_forms[$this->refid]) ? $all_forms[$this->refid] : [];
+            $key   	= $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
+            $this->orderFields = isset($all_forms[$key]) ? $all_forms[$key] : [];
         }
         return $this->orderFields;
     }
+
+    /**
+     * очистка данных формы после удачнго сохранения
+     * @param $id
+     * @return void
+     */
+    private function clearSessForm($id) : void {
+
+        $sess_form = new SessionContainer('Form');
+        if (!$sess_form || !$id || empty($sess_form->$id)) {
+            return;
+        }
+        $all_forms = $sess_form->$id;
+        $key   	= $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
+        unset($all_forms[$key]);
+        $sess_form->$id = $all_forms;
+    }
+
 }
