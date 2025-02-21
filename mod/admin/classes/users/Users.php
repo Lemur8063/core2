@@ -76,4 +76,47 @@ class Users extends \Common {
 
         return true;
     }
+
+
+    /**
+     * @param string $certificate
+     * @return array
+     */
+    public function parseCert(string $certificate): array {
+
+        $x509 = new \phpseclib\File\X509();
+        $x509->loadX509($certificate);
+
+        $subject = $x509->getSubjectDN();
+        $result  = [];
+
+        if ( ! empty($subject) && ! empty($subject['rdnSequence'])) {
+            foreach ($subject['rdnSequence'] as $items) {
+
+                if ( ! empty($items[0]) && ! empty($items[0]['type'])) {
+                    $value = current($items[0]['value']);
+
+                    switch ($items[0]['type']) {
+                        case 'id-at-surname':
+                            $result['lastname'] = ! empty($value) ? $value : '';
+                            break;
+
+                        case 'id-at-name':
+                            $value_explode = explode(' ', $value, 2);
+
+                            $result['firstname'] = ! empty($value_explode[0])
+                                ? $value_explode[0]
+                                : '';
+
+                            $result['middlename'] = ! empty($value_explode[1])
+                                ? $value_explode[1]
+                                : '';
+                            break;
+                    }
+                }
+            }
+        }
+
+        return $result;
+    }
 }
