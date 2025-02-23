@@ -38,9 +38,20 @@ class Mailer
         $body   = $workload->payload->body;
         $bcc    = $workload->payload->bcc;
         $cc     = $workload->payload->cc;
-        $files  = $workload->payload->files;
+        $files  = unserialize($workload->payload->files);
 
         $mail   = new PHPMailer();
+
+        if ($files) {
+            foreach ($files as $i => $file) {
+                $ext = PHPMailer::mb_pathinfo($file['name'], PATHINFO_EXTENSION);
+
+                $uploadfile = tempnam(sys_get_temp_dir(), hash('sha256', $file['name'])) . '.' . $ext;
+                file_put_contents($uploadfile, $file['content']);
+                $files[$i] = ['name' => $file['name'], 'file' => $uploadfile];
+            }
+        }
+
 
         // DEPRECATED
         if (is_array($from)) {
