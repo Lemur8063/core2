@@ -4,11 +4,9 @@ namespace Core2;
 require_once __DIR__ . '/../inc/classes/Error.php';
 require_once __DIR__ . '/../inc/classes/Db.php';
 
-use Laminas\Mail;
-use Laminas\Mail\Transport;
-use Laminas\Mime\Message as MimeMessage;
-use Laminas\Mime\Mime;
-use Laminas\Mime\Part as MimePart;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
 
 class Mailer
 {
@@ -40,10 +38,20 @@ class Mailer
         $body   = $workload->payload->body;
         $bcc    = $workload->payload->bcc;
         $cc     = $workload->payload->cc;
-        $files = unserialize($workload->payload->files);
+        $files  = unserialize($workload->payload->files);
 
-        $message = new Mail\Message();
-        $message->setEncoding('UTF-8');
+        $mail   = new PHPMailer();
+
+        if ($files) {
+            foreach ($files as $i => $file) {
+                $ext = PHPMailer::mb_pathinfo($file['name'], PATHINFO_EXTENSION);
+
+                $uploadfile = tempnam(sys_get_temp_dir(), hash('sha256', $file['name'])) . '.' . $ext;
+                file_put_contents($uploadfile, $file['content']);
+                $files[$i] = ['name' => $file['name'], 'file' => $uploadfile];
+            }
+        }
+
 
         // DEPRECATED
         if (is_array($from)) {
@@ -67,7 +75,7 @@ class Mailer
                 $reply_name  = trim($reply_explode[0]);
             }
 
-            $message->setReplyTo($reply_email, $reply_name);
+            $mail->addReplyTo($reply_email, $reply_name);
         }
 
         $force_from = ! empty($this->_config->mail->force_from) ? $this->_config->mail->force_from : $from;
@@ -84,7 +92,7 @@ class Mailer
             }
 
             if ( ! $reply) {
-                $message->setReplyTo($reply_email, $reply_name);
+                $mail->addReplyTo($reply_email, $reply_name);
             }
 
             $from = $force_from;
@@ -116,7 +124,7 @@ class Mailer
                 $to_name  = trim($to_address_explode[0]);
             }
 
-            $message->addTo($to_email, $to_name);
+            $mail->addAddress($to_email, $to_name);
         }
 
         // CC
@@ -136,7 +144,7 @@ class Mailer
                     $cc_name  = trim($cc_address_explode[0]);
                 }
 
-                $message->addCc($cc_email, $cc_name);
+                $mail->addCC($cc_email, $cc_name);
             }
         }
 
@@ -158,75 +166,71 @@ class Mailer
                     $bcc_name  = trim($bcc_address_explode[0]);
                 }
 
-                $message->addBcc($bcc_email, $bcc_name);
+                $mail->addBCC($bcc_email, $bcc_name);
             }
         }
 
-        $message->setSubject($subj);
-
-        $parts = [];
-
-        $html = new MimePart($body);
-        $html->type     = Mime::TYPE_HTML;
-        $html->charset  = 'utf-8';
-        $html->encoding = Mime::ENCODING_QUOTEDPRINTABLE;
-
-        $parts[] = $html;
+        $mail->Subject = $subj;
 
         if ( ! empty($files)) {
             foreach ($files as $file) {
 
-                $attach_file              = new MimePart($file['content']);
-                $attach_file->type        = $file['mimetype'];
-                $attach_file->filename    = $file['name'];
-                $attach_file->disposition = Mime::DISPOSITION_ATTACHMENT;
-                $attach_file->encoding    = Mime::ENCODING_BASE64;
-
-                $parts[] = $attach_file;
+                $mail->addAttachment($file['file'], $file['name']);
             }
         }
 
-        $body = new MimeMessage();
-        $body->setParts($parts);
+        $mail->isHTML(true);
+        $mail->Body = $body;
+        //Read an HTML message body from an external file, convert referenced images to embedded,
+        //convert HTML into a basic plain-text alternative body
+        //$mail->msgHTML(file_get_contents('contents.html'), __DIR__);
 
-        $message->setBody($body);
-
-        $transport = new Transport\Sendmail();
 
         if ( ! empty($this->_config->mail->server)) {
-            $config_smtp = [
-                'host' => $this->_config->mail->server
-            ];
+            $mail->isSMTP();
+            $mail->Host = $this->_config->mail->server;
 
             if ( ! empty($this->_config->mail->port)) {
-                $config_smtp['port'] = $this->_config->mail->port;
+                $mail->Port = $this->_config->mail->port;
             }
 
             if ( ! empty($this->_config->mail->auth)) {
-                $config_smtp['connection_class'] = $this->_config->mail->auth;
+                $mail->SMTPAuth   = true;
 
                 if ( ! empty($this->_config->mail->username)) {
-                    $config_smtp['connection_config']['username'] = $this->_config->mail->username;
+                    $mail->Username = $this->_config->mail->username;
                     $from_email = $this->_config->mail->username;
                     $from_name = '';
                 }
                 if ( ! empty($this->_config->mail->password)) {
-                    $config_smtp['connection_config']['password'] = $this->_config->mail->password;
+                    $mail->Password = $this->_config->mail->password;
                 }
                 if ( ! empty($this->_config->mail->ssl)) {
-                    $config_smtp['connection_config']['ssl'] = $this->_config->mail->ssl;
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+                    //Custom connection options
+                    //Note that these settings are INSECURE
+                    /*$mail->SMTPOptions = array(
+                        'ssl' => [
+                            'verify_peer' => true,
+                            'verify_depth' => 3,
+                            'allow_self_signed' => true,
+                            'peer_name' => 'smtp.example.com',
+                            'cafile' => '/etc/ssl/ca_cert.pem',
+                        ],
+                    );*/
                 }
             }
 
-            $options   = new Transport\SmtpOptions($config_smtp);
-            $transport = new Transport\Smtp();
-            $transport->setOptions($options);
         }
-        $message->setFrom($from_email, $from_name);
+        $mail->setFrom($from_email, $from_name);
+        $isSent = true;
+        if (!$mail->send()) {
+            //echo 'Mailer Error: ' . $mail->ErrorInfo;
+            $isSent = false;
+        }
         try {
-            $transport->send($message);
 
-            if ( ! empty($workload->payload->queue_id)) {
+            if ( ! empty($workload->payload->queue_id) && $isSent) {
                 $db = (new Db())->db;
 
                 $where = $db->quoteInto('id IN(?)', $workload->payload->queue_id);
@@ -238,6 +242,7 @@ class Mailer
 
                 $db->closeConnection();
             }
+            if (!$isSent) throw new \Exception($mail->ErrorInfo);
 
         } catch (\Exception $e) {
             if ( ! empty($workload->payload->queue_id)) {
@@ -253,6 +258,6 @@ class Mailer
                 $db->closeConnection();
             }
         }
-        return true;
+        return $isSent;
     }
 }
