@@ -25,6 +25,29 @@ class ModAdminApi extends CommonApi
         }
     }
 
+    public function action_acl()
+    {
+        $params = $this->route['params'];
+        if (!$params || !key($params)) throw new \Exception('Error: empty params', 400);
+        switch ($_SERVER['REQUEST_METHOD']) {
+            case 'GET':
+                $resource = strtolower(key($params));
+                $submod = strtolower(current($params));
+                if ($submod) $resource .= "-$submod";
+
+
+                return $this->getAccessInfo($resource);
+                break;
+            case 'POST':
+                if (!empty($params['switch'])) {
+                    return $this->indexSwitch($params['switch'], $this->getInputBody());
+                }
+                break;
+            default:
+                throw new \Exception('Error: method not handled', 405);
+        }
+    }
+
     /**
      * @param $data
      * @return array|bool|string|void|null
@@ -326,5 +349,53 @@ class ModAdminApi extends CommonApi
             return $result;
         }
         return false;
+    }
+
+    #[OAT\Get(
+        path: '/admin/acl/{res}/{subres}',
+        operationId: 'getAccessInfo',
+        summary: 'Возвращает информацию о правах доступа к модулю {res} и к субмодулю {subres}',
+        tags: ['Админ'],
+        parameters: [
+            new OAT\Parameter(
+                name: 'res',
+                in: 'path',
+                required: true,
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\Parameter(
+                name: 'subres',
+                in: 'path',
+                required: false,
+                schema: new OAT\Schema(type: 'string')
+            )],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'массив с правилами доступа',
+                content: new OAT\JsonContent(
+                    type: 'array',
+                    items: new OAT\Items()
+                ),
+            ),
+        ]
+    )]
+    private function getAccessInfo(string $resource)
+    {
+        $role = $this->db->fetchRow("
+                    SELECT name, 
+                           access
+					FROM core_roles
+					WHERE id=? AND is_active_sw = 'Y'
+					ORDER BY position DESC
+                ", $this->auth->ROLEID);
+        if (!$role) throw new \Exception('Error: role not found', 404);
+        $access = $role['access'] ? unserialize($role['access']) : [];
+        $res = [];
+        foreach ($access as $rule => $resources) {
+            if (!isset($resources[$resource])) continue;
+            $res[$rule] = $resources[$resource];
+        }
+        return $res;
     }
 }
