@@ -481,8 +481,12 @@ class ModAjax extends ajaxFunc {
      */
 	public function saveUser(array $data): xajaxResponse {
 
-        $core_config            = Registry::get('core_config');
-        $is_auth_certificate_on = $core_config->auth && $core_config->auth->x509 && $core_config->auth->x509->on;
+        $is_auth_certificate_on = false;
+
+        if ($this->isModuleActive('auth')) {
+            $auth_conf = $this->getModuleConfig('auth');
+            $is_auth_certificate_on = $auth_conf?->auth && $auth_conf?->auth?->x509 && $auth_conf?->auth?->x509?->on;
+        }
         $is_auth_pass_on        = true;
         $is_auth_ldap_on        = $this->config->ldap && $this->config->ldap->active;
 
