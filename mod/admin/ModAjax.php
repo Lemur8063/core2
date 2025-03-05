@@ -576,7 +576,7 @@ class ModAjax extends ajaxFunc {
             }
         }
 
-        $data['control'] = $this->clearData($data['control']);
+        $data['control'] = $this->clearData($data['control'], ['trim']);
 
         if ($this->ajaxValidate($data, $fields)) {
             return $this->response;
