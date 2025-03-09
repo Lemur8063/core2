@@ -20,10 +20,10 @@ class Mailer
 
 
     /**
-     * @param \GearmanJob $job
+     * @param \GearmanJob|Job $job
      * @param array       $log
      */
-    public function run(\GearmanJob $job, array &$log) {
+    public function run(\GearmanJob|Job $job, array &$log) {
 
         $workload = json_decode($job->workload());
         if (\JSON_ERROR_NONE !== json_last_error()) {
