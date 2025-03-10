@@ -1324,6 +1324,9 @@ class WorkerManager {
         if (!$worker) {
             die("Failed to connect to server: $errstr ($errno)\n");
         }
+        //stream_set_read_buffer($worker, 0);
+        //stream_set_chunk_size($worker, 8192);
+        //stream_set_blocking($worker, true);
 
         $dd = str_replace(DIRECTORY_SEPARATOR, "-", dirname(dirname(__DIR__)));
         $dd = trim($dd, '-');
@@ -1349,7 +1352,7 @@ class WorkerManager {
 
         $start = time();
         $tick = time();
-        //$this->max_run_time = 10;
+        $buffer = '';
 
         while (!$this->stop_work) {
 
@@ -1363,7 +1366,7 @@ class WorkerManager {
             }
 
             // Читаем данные от сервера
-            $data = fread($worker, 8192);
+            $data = fread($worker, 20480);
             if ($data === false) {
                 echo "Error reading from server\n";
                 break;
@@ -1402,7 +1405,30 @@ class WorkerManager {
                                 $unique = substr($payload, 0, strpos($payload, "{"));
                                 $payload = substr($payload, strpos($payload, "{"));
                             }
-                            $payload = json_decode($payload);
+                            if (!str_ends_with($payload, "}|")) {
+                                //забрали не все занные
+                                echo "EXTRA $job\n";
+                                $this->toLog("EXTRA data for job $job", self::LOG_LEVEL_WORKER_INFO);
+                                $request = "\0REQ" . // Магическое число (запрос)
+                                    //pack('N', 9) . //GRAB_JOB
+                                    pack('N', 30) . //GRAB_JOB_UNIQ
+                                    pack('N', 0);
+                                $send = fwrite($worker, $request);
+                                if (!$send) {
+                                    break;
+                                }
+                                // Читаем данные от сервера
+                                $data = fread($worker, 20480);
+                                if ($data === false) {
+                                    echo "Error reading from server\n";
+                                    break;
+                                }
+                                $payload .= $data;
+                            }
+
+                            $json = preg_replace('/[[:cntrl:]]/', '', substr($payload, 0, -1));
+                            $payload = json_decode($json);
+
                             if (json_last_error() === JSON_ERROR_NONE) {
                                 // Выполняем задачу
                                 $result = "";
@@ -1412,7 +1438,9 @@ class WorkerManager {
 
                                 try {
                                     $result = $objects[$function]->run(new Job($job, $payload, $unique), $log);
-
+                                    foreach ($log as $item) {
+                                        $this->toLog("Function $function said: $item", self::LOG_LEVEL_WORKER_INFO);
+                                    }
                                     $request = "\0REQ" . // Магическое число (запрос)
                                         pack('N', 13) . //WORK_COMPLETE
                                         pack('N', strlen($job) + strlen($result) + 1) .
@@ -1420,7 +1448,7 @@ class WorkerManager {
                                         $result;
                                     fwrite($worker, $request);
 
-                                    echo "Worker completed job: $job with result: $result\n";
+                                    //echo "Worker completed job: $job with result: $result\n";
 
                                 } catch (\Exception $e) {
                                     $msg = $e->getMessage();
@@ -1430,7 +1458,7 @@ class WorkerManager {
                                         $job . "\0" .
                                         $msg;
                                     fwrite($worker, $request);
-                                    echo "Worker FAILED job: $job with exception: $msg \n\n";
+                                    //echo "Worker FAILED job: $job with exception: $msg \n\n";
                                     $this->toLog("Worker FAILED job: $job with exception: $msg", self::LOG_LEVEL_WORKER_INFO);
                                 }
 
@@ -1443,8 +1471,7 @@ class WorkerManager {
                                     $job . "\0" .
                                     $msg;
                                 fwrite($worker, $request);
-                                echo "Worker FAILED job: $job with exception: $msg \n\n";
-                                echo "$body \n\n";
+                                echo "Worker FAILED job: $job with exception: $msg \n\n" . strlen($data) . "\n\n$function\n\n$json\n\n";
                                 $this->toLog("Worker FAILED job: $job with exception: $msg", self::LOG_LEVEL_WORKER_INFO);
                             }
                         }
@@ -1456,6 +1483,7 @@ class WorkerManager {
                                 $job;
                             fwrite($worker, $request);
                             echo "Function FAILED: $body \n";
+                            $this->toLog("Function FAILED: $function", self::LOG_LEVEL_WORKER_INFO);
                         }
                     } else {
                         //неизвестный код ответа
@@ -1465,6 +1493,7 @@ class WorkerManager {
                             $job;
                         fwrite($worker, $request);
                         echo "Worker TYPE: $type FAILED job: $job \n";
+                        $this->toLog("Worker TYPE $type FAILED: $data", self::LOG_LEVEL_WORKER_INFO);
                     }
 
                 } else {
@@ -1483,6 +1512,7 @@ class WorkerManager {
             }
             else {
                 echo "Server FAILED job: $data \n";
+                $this->toLog("Server FAILED job: $data", self::LOG_LEVEL_WORKER_INFO);
             }
 
             /**
