@@ -544,7 +544,6 @@ class Init extends Db {
         try {
             $module = $this->route['api'];
             $action = $this->route['action'];
-            $this->checkModule($module, $action);
             $this->setContext($module, $action);
             if ($this->route['api'] == 'admin') {
                 require_once 'core2/mod/admin/ModAdminApi.php';
@@ -558,6 +557,9 @@ class Init extends Db {
                     throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
                 }
             }
+
+            $this->checkModule($module, $action);
+
             $location = $this->getModuleLocation($module);
             $modController = "Mod" . ucfirst(strtolower($module)) . "Api";
             $this->requireController($location, $modController);
