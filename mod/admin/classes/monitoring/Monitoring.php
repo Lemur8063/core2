@@ -164,10 +164,26 @@ class Monitoring extends \Common
 
         }
         else {
+            $search_last_activity = "
+                (SELECT last_activity
+                 FROM core_session
+                 WHERE u.u_id = user_id
+                 ORDER BY last_activity DESC
+                 LIMIT 1)
+            ";
+
+            $search_ip = "
+                COALESCE((SELECT ip
+                          FROM core_session
+                          WHERE u.u_id = user_id
+                          ORDER BY last_activity DESC
+                          LIMIT 1), 'не определен')
+            ";
+
             $list = new \listTable($this->resId . 'xxx2');
-            $list->addSearch($this->translate->tr("Пользователь"),               "u_login",       "TEXT");
-            $list->addSearch($this->translate->tr("Время последней активности"), "last_activity", "DATE");
-            $list->addSearch("IP",                         "ip",            "TEXT");
+            $list->addSearch($this->translate->tr("Пользователь"),               "u_login",             "TEXT");
+            $list->addSearch($this->translate->tr("Время последней активности"), $search_last_activity, "DATE");
+            $list->addSearch("IP",                                               $search_ip,            "TEXT");
 
             $list->SQL = "
                 SELECT u_id,
