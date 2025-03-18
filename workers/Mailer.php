@@ -41,6 +41,9 @@ class Mailer
         $files  = unserialize($workload->payload->files);
 
         $mail   = new PHPMailer();
+        $mail->CharSet  = "UTF-8";
+        $mail->Encoding = 'base64';
+        //$mail->SMTPDebug = SMTP::DEBUG_SERVER;
 
         if ($files) {
             foreach ($files as $i => $file) {
