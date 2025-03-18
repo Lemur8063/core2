@@ -680,10 +680,10 @@ class editTable extends initEdit {
 
 						$controlGroups[$cellId]['html'][$key] .= $value['name'] . "</td><td" . ($field ? " id=\"{$this->resource}_cell_$field\"" : "") . ">";
 
-						if ($value['type'] == 'protect' || $value['type'] == 'protected') { //только для чтения
+						if ($value['type'] == 'protect' || $value['type'] == self::TYPE_PROTECTED) { //только для чтения
                             $controlGroups[$cellId]['html'][$key] .= "<span id=\"$fieldId\" {$attrs}>" . $value['default'] . "</span>";
 						}
-						elseif ($value['type'] == 'custom') { // произвольный html
+						elseif ($value['type'] == self::TYPE_CUSTOM) { // произвольный html
 							$controlGroups[$cellId]['html'][$key] .= $attrs;
 						}
 						elseif ($value['type'] == 'text' || $value['type'] == 'edit') { // простое поле
@@ -693,7 +693,7 @@ class editTable extends initEdit {
 								$controlGroups[$cellId]['html'][$key] .= "<input class=\"input\" id=\"$fieldId\" type=\"text\" name=\"control[$field]\" {$attrs} value=\"{$value['default']}\">";
 							}
 						}
-						elseif ($value['type'] == 'time') {
+						elseif ($value['type'] == self::TYPE_TIME) {
 							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'];
 							} else {
@@ -830,16 +830,16 @@ class editTable extends initEdit {
                                 $controlGroups[$cellId]['html'][$key] .= $tpl;
                             }
                         }
-						elseif ($value['type'] == 'coordinates') {
+						elseif ($value['type'] == self::TYPE_COORDINATES) {
                             if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $controlGroups[$cellId]['html'][$key] .= $value['default'];
 
                             } else {
-                                $this->scripts['coordinates'] = true;
+                                $this->scripts[self::TYPE_COORDINATES] = true;
 
                                 $settings = is_array($value['in']) ? $value['in'] : [];
 
-                                $tpl = file_get_contents($this->tpl_control['coordinates']);
+                                $tpl = file_get_contents($this->tpl_control[self::TYPE_COORDINATES]);
                                 $tpl = str_replace('[FIELD_ID]',         $fieldId, $tpl);
                                 $tpl = str_replace('[FIELD]',            $field, $tpl);
                                 $tpl = str_replace('[VALUE]',            $value['default'], $tpl);
@@ -855,7 +855,7 @@ class editTable extends initEdit {
                                 $controlGroups[$cellId]['html'][$key] .= $tpl;
                             }
                         }
-						elseif ($value['type'] == 'switch') {
+						elseif ($value['type'] == self::TYPE_SWITCH) {
                             if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $controlGroups[$cellId]['html'][$key] .= $value['default'] == 'Y' ? $this->_('да') : $this->_('нет');
 
@@ -2351,7 +2351,7 @@ $controlGroups[$cellId]['html'][$key] .= "
 						}
 
 						if (!empty($value['out'])) {
-							$controlGroups[$cellId]['html'][$key] .= $value['out'];
+							$controlGroups[$cellId]['html'][$key] .= str_replace("[VAL]", $value['default'], $value['out']);
 						}
 						$controlGroups[$cellId]['html'][$key] .= '</td></tr></table>';
 					}

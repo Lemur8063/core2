@@ -161,7 +161,7 @@ class Error {
             $message = "Ошибка базы данных!";
         }
         $cnf = self::getConfig();
-        if ($cnf && $cnf->debug->on) {
+        if ($cnf && !empty($cnf->debug) && $cnf->debug->on) {
             $message .= $exception->getMessage(); //TODO вести журнал
         }
         self::Exception($message, $code);

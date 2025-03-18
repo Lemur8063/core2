@@ -78,9 +78,11 @@ class Logger
 
             } else {
                 $data = get_object_vars($workload->payload);
-                if ($data['action']) {
-                    $data['action'] = serialize($data['action']);
+                if (empty($data['action'])) {
+                    throw new \Exception("No Logger action specified");
                 }
+                $data['action'] = serialize($data['action']);
+
                 //$log[] = "Соединяемся с базой...";
                 $mysql = (new Db())->db;
                 try {

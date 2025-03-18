@@ -1315,13 +1315,14 @@ class WorkerManager {
         foreach ($this->servers as $s) {
             $this->toLog("Adding server $s", self::LOG_LEVEL_PROC_INFO);
 
-            $worker = stream_socket_client("tcp://$s", $errno, $errstr, 1);
+            $worker = stream_socket_client("tcp://$s", $errno, $errstr, 2);
             if (!$worker) {
                 continue;
             }
             break;
         }
         if (!$worker) {
+            $this->toLog("Failed to connect to server $s", self::LOG_LEVEL_PROC_INFO);
             die("Failed to connect to server: $errstr ($errno)\n");
         }
         //stream_set_read_buffer($worker, 0);
@@ -1331,11 +1332,14 @@ class WorkerManager {
         $dd = str_replace(DIRECTORY_SEPARATOR, "-", dirname(dirname(__DIR__)));
         $dd = trim($dd, '-');
 
+        register_shutdown_function(array($this, 'fatal_handler'));
+
         $objects = [];
         foreach ($worker_list as $w) {
             $timeout = (isset($timeouts[$w]) ? $timeouts[$w] : 0);
             $w_full = $dd . "-" . $w;
-            $this->toLog("Adding job $w_full ; timeout: " . $timeout, self::LOG_LEVEL_WORKER_INFO);
+            echo "Adding job $w_full\n";
+            $this->toLog("Adding job $w_full ; timeout: " . $timeout, self::LOG_LEVEL_PROC_INFO);
             require_once $this->functions[$w]['path'];
             $func = "\\Core2\\" . $this->functions[$w]['name'];
             $objects[$w_full] = new $func();
@@ -1348,7 +1352,6 @@ class WorkerManager {
 
         }
 
-        register_shutdown_function(array($this, 'fatal_handler'));
 
         $start = time();
         $tick = time();
@@ -1360,17 +1363,13 @@ class WorkerManager {
                 //pack('N', 9) . //GRAB_JOB
                 pack('N', 30) . //GRAB_JOB_UNIQ
                 pack('N', 0);
-            $send = fwrite($worker, $request);
-            if (!$send) {
-                break;
+            if (fwrite($worker, $request) === false) {
+                $this->toLog("Server FAILED GRAB_JOB_UNIQ", self::LOG_LEVEL_PROC_INFO);
+                $this->stop_work = true;
             }
 
             // Читаем данные от сервера
             $data = fread($worker, 20480);
-            if ($data === false) {
-                echo "Error reading from server\n";
-                break;
-            }
 
 //            echo "Received data: " . bin2hex($data) . "\n"; // Вывод сырых данных для отладки
 
@@ -1511,8 +1510,10 @@ class WorkerManager {
 
             }
             else {
-                echo "Server FAILED job: $data \n";
-                $this->toLog("Server FAILED job: $data", self::LOG_LEVEL_WORKER_INFO);
+                if ($data) {
+                    echo "Server FAILED job: $data \n";
+                    $this->toLog("Server FAILED job: $data", self::LOG_LEVEL_WORKER_INFO);
+                }
             }
 
             /**
@@ -1531,10 +1532,12 @@ class WorkerManager {
 
         }
 
-        $request = "\0REQ" . // Магическое число (запрос)
-            pack('N', 3) . //RESET_ABILITIES
-            pack('N', 0);
-        fwrite($worker, $request);
+        if ($worker) {
+            $request = "\0REQ" . // Магическое число (запрос)
+                pack('N', 3) . //RESET_ABILITIES
+                pack('N', 0);
+            fwrite($worker, $request);
+        }
     }
 
     /**
