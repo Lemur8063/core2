@@ -5,6 +5,7 @@ require_once 'Emitter.php';
 use Core2\Registry;
 use Core2\Emitter;
 use Core2\Tool;
+use Core2\Error;
 
 /**
  * Class Common
@@ -24,10 +25,6 @@ class Common extends \Core2\Acl {
 	protected $actionURL;
 	protected $resId;
 
-    /**
-     * @var Zend_Config_Ini
-     */
-	private $_p = array();
 	private $AR = array(
         'module',
         'action'
@@ -72,7 +69,7 @@ class Common extends \Core2\Acl {
         }
 
         $this->path      = 'mod/' . $this->module . '/';
-        $this->auth      = $reg->get('auth');
+        if ($reg->isRegistered('auth')) $this->auth = $reg->get('auth');
         $this->resId     = $this->module;
 		$this->actionURL = "?module=" . $this->module;
 
@@ -143,13 +140,17 @@ class Common extends \Core2\Acl {
 
 
         if ($k === 'moduleConfig') {
-
+            $km = $k . "|" . $this->module;
+            if ($reg->isRegistered($km)) {
+                return $reg->get($km);
+            }
             $module_config = $this->getModuleConfig($this->module);
 
             if ($module_config === false) {
-                \Core2\Error::Exception($this->_("Не найден конфигурационный файл модуля."), 500);
+                Error::Exception($this->_("Не найден конфигурационный файл модуля."), 500);
             } else {
-                $v = $module_config;
+                $reg->set($k . "|" . $this->module, $module_config);
+                return $module_config;
             }
         }
         // Получение экземпляра контроллера указанного модуля
@@ -161,7 +162,7 @@ class Common extends \Core2\Acl {
             }
             elseif ($location = $this->getModuleLocation($module)) {
                 if (!$this->isModuleActive($module)) {
-                    throw new Exception("Модуль \"{$module}\" не активен");
+                    throw new Exception(sprintf($this->translate->tr("Модуль \"%s\" отключен."), $module));
                 }
 
                 $cl              = ucfirst($k) . 'Controller';
@@ -208,15 +209,19 @@ class Common extends \Core2\Acl {
 
         // Получение экземпляра api класса указанного модуля
         elseif (strpos($k, 'api') === 0) {
-            $module = substr($k, 3);
+            $module = strtolower(substr($k, 3));
             if ($k == 'api') {
                 $module = $this->module;
             }
-
-            if ($this->isModuleActive($module)) {
-                $location = $module == 'Admin'
-                    ? DOC_ROOT . "core2/mod/admin"
-                    : $this->getModuleLocation($module);
+            if ($module != 'Admin') {
+                if (!$this->isModuleActive($module)) {
+                    return new stdObject();
+                }
+            }
+            $location = $module == 'Admin'
+                ? DOC_ROOT . "core2/mod/admin"
+                : $this->getModuleLocation($module);
+            if ($location) {
 
                 $module     = ucfirst($module);
                 $module_api = "Mod{$module}Api";
@@ -347,14 +352,16 @@ class Common extends \Core2\Acl {
 
     /**
      * Порождает событие для модулей, реализующих интерфейс Subscribe
-     * @param       $event_name
+     * @param string $event_name
      * @param array $data
+     * @param string $module_override принудительный id модуля-инициатора события
      * @return array
      */
-	protected function emit($event_name, $data = []) {
-	    $em = new Emitter($this, $this->module);
-        $em->addEvent($event_name, $data);
-        return $em->emit();
+	protected function emit($event_name, $data = [], $module_override = '') {
+        $module = $module_override ?: $this->module;
+        $reg    = Registry::getInstance();
+        $em     = $reg->isRegistered('emitter') ? $reg->get('emitter') : new Emitter();
+        return $em->emit($module, $event_name, $data);
     }
 
 
@@ -364,6 +371,8 @@ class Common extends \Core2\Acl {
      * @return bool
      */
     protected function sendErrorMessage($message, $data = []) {
+
+        $this->log->error($message, $data);
 
         $admin_email = $this->getSetting('admin_email');
 
@@ -385,7 +394,7 @@ class Common extends \Core2\Acl {
                 $data_msg .= '<pre>' . $data->getTraceAsString() . '</pre>';
 
             } else {
-                $data_msg = '<pre>' . json_encode($data, JSON_PRETTY_PRINT) . '</pre>';
+                $data_msg = '<pre>' . json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . '</pre>';
             }
         }
 

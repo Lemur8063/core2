@@ -19,7 +19,7 @@ class SSE extends \Common {
         $user_key = $this->auth->LIVEID;
         if (!$user_key) $user_key = $this->auth->ID;
 //        if (!$user_key) $user_key = -1;
-        $shm_key = ftok($eventFile, 't') + crc32($_SERVER['SERVER_NAME'] . strval($user_key)); //у аждого юзера своя очередь
+        $shm_key = ftok($eventFile, 't') + crc32($_SERVER['SERVER_NAME'] . strval($user_key)); //у каждого юзера своя очередь
         if ($q = msg_get_queue($shm_key)) msg_remove_queue($q); //очищаем очередь при запуске SSE
         $eventClass = new MessageQueue();
         $eventClass->setQueue(msg_get_queue($shm_key));
@@ -43,7 +43,6 @@ class SSE extends \Common {
                 }
             }
         }
-        $this->db->closeConnection();
         set_time_limit(0);
     }
 
@@ -82,34 +81,40 @@ class SSE extends \Common {
         $data = [];
 
         foreach ($this->_events as $path => $event) {
-            if ($event->check()) {
-                //TODO реализовать не блокирующий вызов
-                $path = str_replace("\\", "-" , $path);
+            try {
+                if ($event->check()) {
 
-                ob_start();
-                $msgs = $event->dispatch();
+                    //TODO реализовать не блокирующий вызов
+                    $path = str_replace("\\", "-", $path);
 
-                $data[$path] = ob_get_clean();
+                    ob_start();
+                    $msgs = $event->dispatch();
 
-                if ($data[$path] || ($msgs && is_array($msgs))) {
-                    if ($data[$path]) {
-                        echo "event: modules\n",
-                        'data: ', json_encode([$path => $data[$path]]), "\n\n";
-                        $this->doFlush();
-                    }
-                    if ($msgs) {
-                        foreach ($msgs as $topic => $msg) {
-                            if ($topic !== 'global') $topic = "-{$topic}";
-                            else $topic = '';
+                    $data[$path] = ob_get_clean();
 
+                    if ($data[$path] || ($msgs && is_array($msgs))) {
+                        if ($data[$path]) {
                             echo "event: modules\n",
-                            'data: ', json_encode([$path . $topic => $msg]), "\n\n";
+                            'data: ', json_encode([$path => $data[$path]]), "\n\n";
                             $this->doFlush();
+                        }
+                        if ($msgs) {
+                            foreach ($msgs as $topic => $msg) {
+                                if ($topic !== 'global') $topic = "-{$topic}";
+                                else $topic = '';
+
+                                echo "event: modules\n",
+                                'data: ', json_encode([$path . $topic => $msg]), "\n\n";
+                                $this->doFlush();
+                            }
                         }
                     }
                 }
+            } catch (\Exception $e) {
+                //echo $e->getMessage();
             }
         }
+        if ($this->db->isConnected()) $this->db->closeConnection();
 
         if ($data) {
             echo "event: Core2\n",

@@ -43,31 +43,47 @@ class Acl extends Db {
 		$auth 		= $registry->get('auth');
 
 		$key 		= 'acl_' . $auth->ROLEID . self::INHER_ROLES;
-//        $this->cache->clean($key);
+        //$this->cache->clean($key); //исползуй это, если кеш сломался
 
-		if (!($this->cache->hasItem($key))) {
+        if ($this->cache->hasItem($key)) {
+            $acl = $this->cache->getItem($key);
+        }
+
+		if (empty($acl)) {
 			$acl = new LaminasAcl();
-			$SQL = "SELECT *
-					  FROM (
-						(SELECT module_id, m.seq, m.access_default, m.access_add
-						  FROM core_modules AS m
-						  WHERE visible='Y'
-						  ORDER BY seq)
-						UNION ALL
-						(SELECT CONCAT(m.module_id, '_', s.sm_key) AS module_id, m.seq, s.access_default, s.access_add
-							FROM core_submodules AS s
-								 INNER JOIN core_modules AS m ON m.m_id = s.m_id AND m.visible='Y'
-							WHERE sm_id > 0 AND s.visible='Y'
-						   ORDER BY m.seq, s.seq)
-					   ) AS a ORDER BY 2";
-			$res = $this->db->fetchAll($SQL);
-			// ADD ALL AVAILABLE RESOURCES
-			$resources = array();
-			$resources2 = array();
-			$access_default = array();
+			$res = $this->db->fetchAll("
+                SELECT *
+                FROM (
+                    (SELECT module_id, 
+                            m.seq, 
+                            m.access_default, 
+                            m.access_add
+                     FROM core_modules AS m
+                     WHERE visible = 'Y'
+                     ORDER BY seq)
+                    
+                    UNION ALL
+                    
+                    (SELECT CONCAT(m.module_id, '_', s.sm_key) AS module_id, 
+                            m.seq, 
+                            s.access_default, 
+                            s.access_add
+                     FROM core_submodules AS s
+                         INNER JOIN core_modules AS m ON m.m_id = s.m_id AND m.visible = 'Y'
+                     WHERE sm_id > 0 
+                       AND s.visible = 'Y'
+                     ORDER BY m.seq, s.seq)
+                ) AS a 
+                ORDER BY 2
+            ");
 
-			// Если не назначена роль, добавляем виртуальную роль в ACL
-			if ($auth->ROLE === -1) {
+            // ADD ALL AVAILABLE RESOURCES
+            $resources      = [];
+            $resources2     = [];
+            $access_default = [];
+
+            // Если не назначена роль, добавляем виртуальную роль в ACL
+			if ($auth->ROLE < 0) {
 				$acl->addRole(new Role($auth->ROLE));
 			}
 
@@ -123,19 +139,12 @@ class Acl extends Db {
 						$acl->addRole(new Role($roleName));
 					}
 
-					$access = unserialize($role['access']);
+					$access = $role['access'] ? unserialize($role['access']) : null;
 
                     if ( ! empty($access)) {
                         foreach ($access as $type => $data) {
                             if (strpos($type, 'default') === false) {
 
-                                foreach ($resources2 as $availSubRes) {
-                                    if (!empty($data[str_replace('_', '-', $availSubRes)])) {
-                                        $acl->allow($roleName, $availSubRes, $type);
-                                    } else {
-                                        $acl->deny($roleName, $availSubRes, $type);
-                                    }
-                                }
                                 foreach ($resources as $availRes) {
                                     if (!empty($data[$availRes])) {
                                         $acl->allow($roleName, $availRes, $type);
@@ -143,6 +152,20 @@ class Acl extends Db {
                                         $acl->deny($roleName, $availRes, $type);
                                     }
                                 }
+
+                                foreach ($resources2 as $availSubRes) {
+                                    [$res, $subres] = explode("_", $availSubRes);
+                                    if (!empty($data[str_replace('_', '-', $availSubRes)])) {
+                                        $acl->allow($roleName, $availSubRes, $type);
+                                    } else {
+                                        $acl->deny($roleName, $availSubRes, $type);
+                                    }
+                                    if ($type == 'access' && empty($data[$res])) {
+                                        //закрываем доступ, если основной ресурс не досупен
+                                        $acl->deny($roleName, $availSubRes, $type);
+                                    }
+                                }
+
                             }
                         }
                         foreach ($access as $type => $data) {
@@ -200,18 +223,15 @@ class Acl extends Db {
 					}
 				}
 			}
+
 			$this->cache->setItem($key, $acl);
-
 			$this->cache->setTags($key, array("role" . $auth->ROLEID));
-
-		}
-		else {
-			$acl = $this->cache->getItem($key);
 		}
 
-        $res = $acl->getResources();
-        $resources = [];
+        $res        = $acl->getResources();
+        $resources  = [];
         $resources2 = [];
+
         foreach ($res as $re) {
             if (strpos($re, '_')) {
                 $resources2[] = $re;
@@ -219,10 +239,10 @@ class Acl extends Db {
                 $resources[] = $re;
             }
         }
-		$registry->set('acl', $acl);
-		$registry->set('availRes', $resources);
-		$registry->set('availSubRes', $resources2);
 
+		$registry->set('acl',         $acl);
+		$registry->set('availRes',    $resources);
+		$registry->set('availSubRes', $resources2);
 	}
 
 
@@ -307,7 +327,7 @@ class Acl extends Db {
 	 * @param $type
 	 * @return bool
 	 */
-	public function checkAcl($source, $type = 'access') {
+	public function checkAcl($source, $type = 'access'): bool {
 
         $registry = Registry::getInstance();
 

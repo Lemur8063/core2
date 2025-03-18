@@ -59,7 +59,7 @@ class CoreController extends Common implements File {
      * @param string $k
      * @param array  $arg
      */
-    public function __call ($k, $arg) {
+    public function __call($k, $arg) {
 		if ( ! method_exists($this, $k)) {
             return;
         }
@@ -336,171 +336,75 @@ class CoreController extends Common implements File {
 	}
 
 
-	/**
-     * Переключатель признака активности записи
-	 * @throws Exception
-     * @return void
-	 */
-	public function action_switch() {
+    /**
+     * Обновление последовательности записей
+     * @return string
+     */
+	public function action_seq(): string {
 
-		try {
-            if ( ! isset($_POST['data'])) {
-                throw new Exception($this->translate->tr('Произошла ошибка! Не удалось получить данные'));
-            }
-
-			$res = explode('.', $_POST['data']);
-
-			preg_match('/[a-z|A-Z|0-9|_|-]+/', trim($res[0]), $arr);
-			$table_name = $arr[0];
-			$is_active = $res[1];
-			$id = isset($res[2]) ? $res[2] : 0;
-			if (!$id && !empty($_POST['value'])) {
-				$id = (int) $_POST['value'];
-			}
-			$status = $_POST['is_active'];
-			$keys_list = $this->db->fetchRow("SELECT * FROM `{$table_name}` LIMIT 1");
-			$keys = array_keys($keys_list);
-			$key = $keys[0];
-			$where = $this->db->quoteInto($key . "= ?", $id);
-			$this->db->update($table_name, array($is_active => $status), $where);
-			//очистка кеша активности по всем записям таблицы
-			// используется для core_modules
-			$this->cache->clearByTags(["is_active_" . $table_name]);
-
-			echo json_encode(array('status' => "ok"));
-		} catch (Exception $e) {
-			echo json_encode(array('status' => $e->getMessage()));
-		}	
-	}
-
-	/**
-	 * Занимается удалением записей в таблицах базы данных
-	 * если в талице есть поле is_deleted_sw, то запись не удаляется, а поле is_deleted_sw принимает значение 'Y'
-	 *
-	 * @param array $params
-	 *
-	 * @return bool
-	 * @throws Exception
-	 */
-    public function action_delete(array $params)
-    {
-        $resource = $params['res'];
-
-        if ( ! $resource) {
-            throw new Exception($this->translate->tr("Не удалось определить идентификатор ресурса"), 13);
+        if (empty($_POST['id']) || ! is_string($_POST['id'])) {
+            return '{}';
         }
 
-        if ( ! $params['id']) {
-            throw new Exception($this->translate->tr("Нет данных для удаления"), 13);
-        }
-
-        $sess      = new SessionContainer('List');
-        $sessData  = $sess->$resource;
-        $deleteKey = $sessData['deleteKey'];
-        $ids       = explode(",", $params['id']);
-
-        if ( ! $deleteKey) {
-            throw new Exception($this->translate->tr("Не удалось определить параметры удаления"), 13);
-        }
-
-        [$table, $refid] = explode(".", $deleteKey);
-
-        if ( ! $table || ! $refid) {
-            throw new Exception($this->translate->tr("Не удалось определить параметры удаления"), 13);
-        }
-
-        // TODO В случае, когда нужно удалить что-то на главной странице - это нельзя будет сделать, так как у обычного юзера нет доступа к модулю админ
-
-        if (($this->checkAcl($resource, 'delete_all') || $this->checkAcl($resource, 'delete_owner'))) {
-            $authorOnly = false;
-            if ($this->checkAcl($resource, 'delete_owner') && ! $this->checkAcl($resource, 'delete_all')) {
-                $authorOnly = true;
-            }
-            $this->db->beginTransaction();
-            try {
-                $is = $this->db->fetchAll("EXPLAIN `$table`");
-
-                $nodelete = false;
-                $noauthor = true;
-
-                foreach ($is as $value) {
-                    if ($value['Field'] == 'is_deleted_sw') {
-                        $nodelete = true;
-                    }
-                    if ($authorOnly && $value['Field'] == 'author') {
-                        $noauthor = false;
-                    }
-                }
-                if ($authorOnly) {
-                    if ($noauthor) {
-                        throw new \Exception($this->translate->tr("Данные не содержат признака автора!"));
-                    } else {
-                        $auth = new SessionContainer('Auth');
-                    }
-                }
-                if ($nodelete) {
-                    foreach ($ids as $key) {
-                        $where = array($this->db->quoteInto("`$refid` = ?", $key));
-                        if ($authorOnly) {
-                            $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
-                        }
-                        $this->db->update($table, array('is_deleted_sw' => 'Y'), $where);
-                    }
-                } else {
-                    foreach ($ids as $key) {
-                        $where = array($this->db->quoteInto("`$refid` = ?", $key));
-                        if ($authorOnly) {
-                            $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
-                        }
-                        $this->db->delete($table, $where);
-                    }
-                }
-                $this->db->commit();
-            } catch (Exception $e) {
-                $this->db->rollback();
-                throw new \Exception($e->getMessage(), 13);
-            }
-        } else {
-            throw new \Exception(911, 13);
-        }
-        return true;
-    }
-
-
-	/**
-	 * Обновление последовательности записей
-	 */
-	public function action_seq () {
-        if (empty($_POST['id'])) return '{}';
 		$this->db->beginTransaction();
 		try {
-            $ss = new SessionContainer('Search');
-            $tbl_id = "main_" . $_POST['id'];
-            $tmp = $ss->$tbl_id;
-            if ($tmp && !empty($tmp['order'])) {
+            $resource       = $_POST['id'];
+            $session_search = new SessionContainer('Search');
+
+            $search_list = $session_search?->{"main_{$resource}"};
+
+            if ($search_list && ! empty($search_list['order'])) {
                 throw new \Exception($this->translate->tr("Ошибка! Сначала переключитесь на сортировку по умолчанию."));
             }
-			preg_match('/[a-z|A-Z|0-9|_|-]+/', trim($_POST['tbl']), $arr);
-			$tbl = $arr[0];
-            $id = "id";
-            // исключение для списка модулей
-            if ($tbl == 'core_modules') $id = 'm_id';
-            $sql = "SELECT $id AS id, seq FROM `$tbl` WHERE $id IN ('" . implode("','", $_POST['data']) . "') ORDER BY seq ASC";
-			$res = $this->db->fetchPairs($sql);
-			if ($res) {
-				$values = array_values($res);
-				foreach ($_POST['data'] as $k => $val) {
-					$where = $this->db->quoteInto("$id=?", $val);
-					$this->db->update($tbl, array('seq' => $values[$k]), $where);
-				}
+
+            // Получение названия таблицы из сессии, если это возможно
+            $session_table = new SessionContainer($resource);
+            $session_list  = new SessionContainer('List');
+
+            if ($session_table?->table?->name) {
+                $table_name = $session_table->table->name;
+
+            } elseif ( ! empty($session_list->{$resource}) &&
+                       ! empty($session_list->{$resource}->deleteKey)
+            ) {
+                $table_name = explode('.', $session_list->{$resource}->deleteKey);
+                $table_name = $table_name ? current($table_name) : null;
+            }
+
+            if (empty($table_name)) {
+                preg_match('/[a-z|A-Z|0-9|_|-]+/', trim($_POST['tbl']), $arr);
+                $table_name = $arr[0];
+            }
+
+            $id_name          = $table_name == 'core_modules' ? 'm_id' : "id";
+            $table_name_quote = $this->db->quoteIdentifier($table_name);
+            $where            = $this->db->quoteInto("{$id_name} IN (?)", $_POST['data']);
+
+			$rows = $this->db->fetchPairs("
+                SELECT {$id_name} AS id, 
+                       seq 
+                FROM {$table_name_quote}
+                WHERE $where 
+                ORDER BY seq ASC
+            ");
+
+			if ($rows) {
+				$rows_seq = array_values($rows);
+
+				foreach ($_POST['data'] as $k => $row_id) {
+					$where = $this->db->quoteInto("{$id_name} = ?", $row_id);
+                    $this->db->update($table_name, ['seq' => $rows_seq[$k]], $where);
+                }
 			}
+
 			$this->db->commit();
             return '{}';
+
 		} catch (Exception $e) {
 			$this->db->rollback();
-            return json_encode(array('error' => $e->getMessage()));
-		}
-	}
+            return json_encode(['error' => $e->getMessage()]);
+        }
+    }
 
 
 	/**
@@ -545,30 +449,30 @@ class CoreController extends Common implements File {
 		$view  = new Admin\Users\View();
         $panel = new Panel();
 
-        ob_start();
+        $content = '';
 
         try {
             if (isset($_GET['edit'])) {
                 if (empty($_GET['edit'])) {
                     $panel->setTitle($this->_("Создание нового пользователя"), '', $app);
-                    echo $view->getEdit($app);
+                    $content = $view->getEdit($app);
                 } else {
                     $user = new Admin\Users\User($_GET['edit']);
                     $panel->setTitle($user->u_login, $this->_('Редактирование пользователя'), $app);
-                    echo $view->getEdit($app, $user);
+                    $content = $view->getEdit($app, $user);
                 }
 
 
             } else {
                 $panel->setTitle($this->_("Справочник пользователей системы"));
-                echo $view->getList($app);
+                $content = $view->getList($app);
             }
 
         } catch (\Exception $e) {
-            echo Alert::danger($e->getMessage(), 'Ошибка');
+            $content = Alert::danger($e->getMessage(), 'Ошибка');
         }
 
-        $panel->setContent(ob_get_clean());
+        $panel->setContent($content);
         return $panel->render();
 	}
 
@@ -618,10 +522,10 @@ class CoreController extends Common implements File {
 	}
 
 
-	/**
-	 *
-	 */
-	public function action_welcome () {
+    /**
+     * @throws Exception
+     */
+    public function action_welcome () {
 
 		if (!empty($_POST['sendSupportForm'])) {
 			if (isset($_POST['supportFormModule'])) {
@@ -634,14 +538,10 @@ class CoreController extends Common implements File {
 			} else {
 				$supportFormMessage = '';
 			}
-			$supportFormMessagePost = $supportFormMessage;
 
 			header('Content-type: application/json; charset="utf-8"');
 
 			try {
-//				if (empty($supportFormModule)) {
-//					throw new Exception($this->translate->tr('Выберите модуль.'));
-//				}
 				if (empty($supportFormMessage)) {
 					throw new Exception($this->translate->tr('Введите текст сообщения.'));
 				}
@@ -706,6 +606,51 @@ class CoreController extends Common implements File {
 
             return;
 		}
+
+        if ( ! empty($_GET['error_front'])) {
+            $request_raw = file_get_contents('php://input', 'r');
+            $errors      = $request_raw ? json_decode($request_raw, true) : [];
+
+            if ($errors && is_array($errors)) {
+                $i     = 1;
+                $limit = 100;
+                foreach ($errors as $error) {
+                    if ($i >= $limit) {
+                        break;
+                    }
+
+                    if ( ! empty($error['url']) && is_string($error['url']) && mb_strlen($error['url']) > 255) {
+                        $error['url'] = mb_substr($error['url'], 0, 255);
+                    }
+                    if ( ! empty($error['type']) && is_string($error['type']) && mb_strlen($error['type']) > 100) {
+                        $error['type'] = mb_substr($error['type'], 0, 100);
+                    }
+
+                    $level = 'error';
+
+                    if ( ! empty($error['level']) &&
+                         is_string($error['level']) &&
+                         in_array($error['level'], ['warning', 'info', 'error'])
+                    ) {
+                        $level = $error['level'];
+                    }
+
+                    $error_type = ! empty($error['type']) && is_string($error['type']) ? $error['type'] : 'error';
+
+                    $this->log->{$level}($error_type, [
+                        'login'  => $this->auth->NAME,
+                        'url'    => $error['url'] ?? null,
+                        'error'  => $error['error'] ?? null,
+                        'client' => $error['client'] ?? null,
+                    ]);
+
+                    $i++;
+                }
+            }
+
+            return;
+        }
+
 		if (file_exists('mod/home/welcome.php')) {
 			require_once 'mod/home/welcome.php';
 		}
@@ -719,7 +664,7 @@ class CoreController extends Common implements File {
      * @param $id - id файла
      * @return bool
      */
-    public function action_filehandler($context, $table, $id) {
+    public function action_filehandler($context, $table, int $id) {
 
         // Используется для случая когда не нужно получать список уже загруженных файлов
         if ($table == 'core_users') {
@@ -830,42 +775,6 @@ class CoreController extends Common implements File {
 		if ($res) {
 			$out .= '<div>' . sprintf($this->translate->tr("Последний раз Вы заходили %s с IP адреса %s"), '<b>' . $res['login_time2'] . '</b>', '<b>' . $res['ip'] . '</b>') . '</div>';
 		}
-		//Проверка активных сессий данного пользователя
-		if ($this->config->database->adapter == 'Pdo_Mysql') {
-			$res = $this->db->fetchAll("SELECT ip, sid
-										  FROM core_session
-										 WHERE user_id = ?
-										   AND logout_time IS NULL
-										   AND (NOW() - last_activity > $sLife)=0
-										 ", $this->auth->ID);
-		} elseif ($this->config->database->adapter == 'pdo_pgsql') {
-			$res = $this->db->fetchAll("SELECT ip, sid
-										  FROM core_session
-										 WHERE user_id = ?
-										   AND logout_time IS NULL
-										   AND EXTRACT(EPOCH FROM (NOW() - last_activity)) <= $sLife
-										 ", $this->auth->ID);
-		}
-		$co = count($res);
-		if ($co > 1) {
-			$ip = array();
-			foreach ($res as $k => $value) {
-				if ($value['sid'] == session_id()) continue;
-				$ip[] = $value['ip'];
-			}
-			$ip = implode(', ', $ip);
-			if ($co == 2) {
-				$o = '';
-				$px = 'ь';
-				$px2 = 'й';
-			} else {
-				$o = 'o';
-				$px2 = 'е';
-				if (5 >= $co && $co > 2) $px = 'я';
-				elseif ($co > 5) $px = 'ей';
-			}
-			$out .= '<div style="color:red"><b>Внимание! Обнаружен' . $o . ' еще ' . ($co - 1) . ' пользовател' . $px . ', использующи' . $px2 . ' вашу учетную запись.</b><br/>IP: ' . $ip . '</div>';
-		}
 
 
 		// Проверка наличия входящих непрочитаных сообщений
@@ -937,7 +846,7 @@ class CoreController extends Common implements File {
             $app = "index.php?module=admin&action=monitoring";
             $monitor = new \Core2\Monitoring();
 
-            $tab = new tabs('monitoring');
+            $tab = new tabs('admin_monitoring');
 
             $tab->addTab($this->translate->tr("Активные пользователи"), $app, 170);
             $tab->addTab($this->translate->tr("История посещений"),     $app, 170);
@@ -1175,105 +1084,6 @@ class CoreController extends Common implements File {
     }
 
 
-	/**
-	 * Получаем логи
-	 * @param string $type
-	 * @param string $search
-	 * @param int    $limit_lines
-	 * @return array
-	 */
-	private function getLogsData($type, $search, $limit_lines = null) {
-
-		if ($type == 'file') {
-			$handle = fopen($this->config->log->system->file, "r");
-			$count_lines = 0;
-			while (!feof($handle)) {
-				fgets($handle, 4096);
-				$count_lines += 1;
-			}
-
-			if ($search) {
-				$search = preg_quote($search, '/');
-			}
-			rewind($handle); //перемещаем указатель в начало файла
-			$body = array();
-			while (!feof($handle)) {
-				$tmp = fgets($handle, 4096);
-				if ($search) {
-					if (preg_match("/$search/", $tmp)) {
-						if (!$limit_lines || $limit_lines > count($body)) {
-							$body[] = $tmp;
-						} else {
-							array_shift($body);
-							$body[] = $tmp;
-						}
-					}
-				} else {
-					if (!$limit_lines || $limit_lines >= count($body)) {
-						$body[] = $tmp;
-					} else {
-						array_shift($body);
-						$body[] = $tmp;
-					}
-				}
-			}
-			fclose($handle);
-			return array('body' => implode('', $body), 'count_lines' => $count_lines);
-
-		} else {
-			$where = '';
-			if ($search) {
-				$where = $this->db->quoteInto('WHERE u.u_login LIKE ?', "%$search%") .
-						$this->db->quoteInto(' OR l.sid LIKE ?', "%$search%") .
-						$this->db->quoteInto(' OR l.action LIKE ?', "%$search%") .
-						$this->db->quoteInto(' OR l.lastupdate LIKE ?', "%$search%") .
-						$this->db->quoteInto(' OR l.query LIKE ?', "%$search%") .
-						$this->db->quoteInto(' OR l.request_method LIKE ?', "%$search%") .
-						$this->db->quoteInto(' OR l.remote_port LIKE ?', "%$search%") .
-						$this->db->quoteInto(' OR l.ip LIKE ?', "%$search%");
-			}
-            $sql = "
-                SELECT u.u_login,
-                       l.sid,
-                       l.action,
-                       l.lastupdate,
-                       l.query,
-                       l.request_method,
-                       l.remote_port,
-                       l.ip
-                FROM core_log AS l
-                    LEFT JOIN core_users AS u ON u.u_id = l.user_id
-                    $where
-            ";
-
-            if ($limit_lines) {
-                $count_where = $this->db->fetchOne("
-                    SELECT count(*)
-                    FROM core_log AS l
-                        LEFT JOIN core_users AS u ON u.u_id = l.user_id
-                        $where
-                ");
-
-                $start = $count_where - $limit_lines;
-                if ($start < 0) {
-                    $start = 0;
-                }
-                $sql .= " LIMIT $start, $limit_lines ";
-            }
-
-
-			$data        = $this->db->fetchAll($sql);
-            $count_lines = $this->db->fetchOne("SELECT count(*) FROM core_log");
-
-
-            $data2 = '';
-			foreach ($data as $tmp) {
-				$data2 .= "user: {$tmp['u_login']}, sid: {$tmp['sid']}, action: {$tmp['action']}, lastupdate: {$tmp['lastupdate']}, query: {$tmp['query']}, query: {$tmp['request_method']}, remote_port: {$tmp['remote_port']}, ip: {$tmp['ip']}\n";
-			}
-
-			return array('body' => $data2, 'count_lines' => $count_lines);
-		}
-	}
 
     /**
      * @throws Exception

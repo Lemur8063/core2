@@ -103,7 +103,7 @@ class ajaxFunc extends Common {
 
 		foreach ($control as $field => $val) {
 			if (!is_array($val)) {
-				$control[$field] = is_string($val) ? trim($val) : "";
+				$control[$field] = is_string($val) || is_numeric($val) ? trim((string)$val) : "";
 
 				if (isset($control[$field . "%re"]) && $val !== $control[$field . "%re"]) {
 					$script .= "document.getElementById('" . $order_fields['mainTableId'] . $field . "2').className='reqField';";
@@ -477,7 +477,7 @@ class ajaxFunc extends Common {
 						foreach ($fileFlagDel as $value) {
 							$value = explode(",", $value);
 							$ids = array();
-							foreach ($value as $k => $inid) {
+							foreach ($value as $inid) {
 								$inid = (int)$inid;
 								if ($inid) $ids[] = $inid;
 							}
@@ -653,7 +653,7 @@ class ajaxFunc extends Common {
                 }
 
 
-                if ( ! empty($control)) {
+                if ($row && ! empty($control)) {
                     $row->setFromArray($control);
                     $row->save();
                 }
@@ -755,6 +755,7 @@ class ajaxFunc extends Common {
 
 			$this->response->script($script);
 		}
+        $this->clearSessForm($data['class_id']);
 	}
 
 
@@ -899,7 +900,7 @@ class ajaxFunc extends Common {
                             'use_path_style_endpoint' => true
                         ]);
                         //$listResponse = $client->listBuckets();
-                        $key = "$table|$last_insert_id|$hash";
+                        $key = "{$table}/{$last_insert_id}/{$hash}";
                         $client->putObject([
                             'Bucket' => $s3->bucket,
                             'Key' => $key,
@@ -944,8 +945,27 @@ class ajaxFunc extends Common {
                 return array();
             }
             $all_forms = $sess_form->$id;
-            $this->orderFields = isset($all_forms[$this->refid]) ? $all_forms[$this->refid] : [];
+            $key   	= $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
+            $this->orderFields = isset($all_forms[$key]) ? $all_forms[$key] : [];
         }
         return $this->orderFields;
     }
+
+    /**
+     * очистка данных формы после удачнго сохранения
+     * @param $id
+     * @return void
+     */
+    private function clearSessForm($id) : void {
+
+        $sess_form = new SessionContainer('Form');
+        if (!$sess_form || !$id || empty($sess_form->$id)) {
+            return;
+        }
+        $all_forms = $sess_form->$id;
+        $key   	= $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
+        unset($all_forms[$key]);
+        $sess_form->$id = $all_forms;
+    }
+
 }

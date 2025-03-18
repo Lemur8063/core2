@@ -56,7 +56,8 @@ class Log {
                     return new \stdClass();
                 }
 
-            } elseif ($name === 'webhook') {
+            }
+            elseif ($name === 'webhook') {
                 if (isset($this->config->log) &&
                     isset($this->config->log->webhook)
                 ) {
@@ -65,13 +66,33 @@ class Log {
                 } else {
                     return new \stdClass();
                 }
+            }
+            elseif ($name === 'logger') {
+                //Logger worker
+                $this->writer = 'file';
             } else {
+                $config = Registry::get('config');
+                if (isset($config->log) && !$config->log->on) return new \stdClass(); //юзер отключил ведение логов
+
+                $files = [];
                 if (isset($this->config->log) &&
                     isset($this->config->log->system) &&
                     ! empty($this->config->log->system->file) &&
                     is_string($this->config->log->system->file)
                 ) {
-                    $stream = new StreamHandler($this->config->log->system->file);
+                    $files[] = $this->config->log->system->file;
+                }
+                if (isset($config->log) &&
+                    isset($config->log->system) &&
+                    ! empty($config->log->system->file) &&
+                    is_string($config->log->system->file)
+                ) {
+                    if (!in_array($config->log->system->file, $files)) $files[] = $config->log->system->file;
+                }
+
+                foreach ($files as $file) {
+
+                    $stream = new StreamHandler($file);
                     //$stream->setFormatter(new NormalizerFormatter());
                     $this->log->pushHandler($stream);
                 }
@@ -79,7 +100,15 @@ class Log {
         }
         else {
             $this->config = Registry::get('config');
-            $this->log    = new Logger($name);
+            if (isset($this->config->log) &&
+                isset($this->config->log->access) &&
+                ! empty($this->config->log->access->file) &&
+                is_string($this->config->log->access->file)
+            ) {
+                $this->log    = new Logger($name);
+                $this->log->pushHandler(new StreamHandler($this->config->log->access->file, Logger::INFO));
+                $this->writer = 'file';
+            }
         }
     }
 
@@ -150,7 +179,6 @@ class Log {
      * @param string $name
      */
     public function access($name, $sid) {
-        $this->setWriter();
         $this->log->pushProcessor(new WebProcessor());
         $this->log->info($name, array('sid' => $sid));
     }
@@ -163,8 +191,11 @@ class Log {
      */
     public function info($msg, $context = array()) {
         if (is_array($msg)) {
-            $context = $msg;
-            $msg = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
         if ($this->handlers) {
             $this->setHandler(Logger::INFO);
@@ -181,8 +212,11 @@ class Log {
      */
     public function warning($msg, $context = array()) {
         if (is_array($msg)) {
-            $context = $msg;
-            $msg = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
         if ($this->handlers) {
             $this->setHandler(Logger::WARNING);
@@ -194,14 +228,28 @@ class Log {
 
     /**
      * Предупреждение в лог
-     * @param array|string $msg
-     * @param array        $context
+     * @param array|string    $msg
+     * @param array|\Exception $context
      */
     public function error($msg, $context = array()) {
+
         if (is_array($msg)) {
-            $context = $msg;
-            $msg = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
+
+        if ($context instanceof \Exception) {
+            $context = [
+                'message' => $context->getMessage(),
+                'file'    => $context->getFile(),
+                'line'    => $context->getLine(),
+                'trace'   => $context->getTrace(),
+            ];
+        }
+
         if ($this->handlers) {
             $this->setHandler(Logger::ERROR);
         }
@@ -217,8 +265,11 @@ class Log {
      */
     public function debug($msg, $context = array()) {
         if (is_array($msg)) {
-            $context = $msg;
-            $msg = '-';
+            if (!$context) {
+                $context = $msg;
+                $msg = '-';
+            }
+            else $msg = json_encode($msg);
         }
         if ($this->handlers) {
             $this->setHandler(Logger::DEBUG);

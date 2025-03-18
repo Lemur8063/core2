@@ -1,12 +1,10 @@
 <?php
 namespace Core2\Classes\Table;
-use Core2\Classes\Table;
-use Laminas\Session\Container as SessionContainer;
-
 
 require_once __DIR__ . '/../Table.php';
 require_once 'Db/Select.php';
 
+use Core2\Classes\Table;
 
 
 /**
@@ -17,6 +15,7 @@ class Db extends Table {
 
     protected $table         = '';
     protected $primary_key   = '';
+
     protected $query         = '';
     protected $query_result  = '';
     protected $query_params  = '';
@@ -25,6 +24,7 @@ class Db extends Table {
     protected $is_fetched    = false;
     protected $query_parts   = [];
     private $_db;
+    private $cachable = false;
 
 
     /**
@@ -57,25 +57,31 @@ class Db extends Table {
 
     /**
      * @param string $table
+     * @return void
      */
-    public function setTable(string $table) {
+    public function setTable(string $table): void {
+
         $this->table      = $table;
         $this->table_name = $table;
+
+        $this->session->table->name = $this->table;
 
         // Из class.list
         // Нужно для удаления
         if ($this->table && $this->primary_key) {
-            $sess = new SessionContainer('List');
-            $tmp              = ! empty($sess->{$this->resource}) ? $sess->{$this->resource} : [];
-            $tmp['deleteKey'] = "{$this->table}.{$this->primary_key}";
-            $sess->{$this->resource} = $tmp;
+            $this->deleteKey = "{$this->table}.{$this->primary_key}";
         }
     }
 
-    public function setDatabase($db)
-    {
+
+    /**
+     * @param $db
+     * @return void
+     */
+    public function setDatabase($db) {
         $this->_db = $db;
     }
+
 
     /**
      * @param string $key
@@ -86,10 +92,7 @@ class Db extends Table {
         // Из class.list
         // Нужно для удаления
         if ($this->table && $this->primary_key) {
-            $sess = new SessionContainer('List');
-            $tmp              = ! empty($sess->{$this->resource}) ? $sess->{$this->resource} : [];
-            $tmp['deleteKey'] = "{$this->table}.{$this->primary_key}";
-            $sess->{$this->resource} = $tmp;
+            $this->deleteKey = "{$this->table}.{$this->primary_key}";
         }
     }
 
@@ -119,11 +122,22 @@ class Db extends Table {
      * Получение данных из базы
      * @return Row[]
      * @throws \Zend_Db_Select_Exception
-     * @deprecated fetchRows
+     * @deprecated fetchRecords
      */
     public function fetchData(): array {
 
         return $this->fetchRows();
+    }
+
+
+    /**
+     * Получение данных из базы
+     * @return Record[]
+     * @throws \Zend_Db_Select_Exception
+     */
+    public function fetchRecords(): array {
+
+        return $this->fetch(Record::class);
     }
 
 
@@ -134,20 +148,48 @@ class Db extends Table {
      */
     public function fetchRows(): array {
 
-        if ( ! $this->is_fetched) {
-            $this->preFetchRows();
+        return $this->fetch(Row::class);
+    }
 
-            $this->is_fetched = true;
 
-            if ($this->data instanceof \Zend_Db_Select) {
-                $this->data_rows = $this->fetchDataSelect($this->data);
+    /**
+     * Получение данных из базы
+     * @param string $class_row
+     * @return array
+     * @throws Exception
+     * @throws \DateMalformedStringException
+     * @throws \Zend_Db_Adapter_Exception
+     * @throws \Zend_Db_Select_Exception
+     */
+    private function fetch(string $class_row = Row::class): array {
 
-            } elseif ($this->data instanceof \Zend_Db_Table_Abstract) {
-                $this->data_rows = $this->fetchDataTable($this->data);
+        try {
+            if ( ! $this->is_fetched) {
+                $this->preFetchRows();
 
-            } elseif ($this->query) {
-                $this->data_rows = $this->fetchDataQuery($this->query);
+                $this->is_fetched = true;
+
+                if ($this->data instanceof \Zend_Db_Select) {
+                    $this->data_rows = $this->fetchDataSelect($this->data, $class_row);
+
+                } elseif ($this->data instanceof \Zend_Db_Table_Abstract) {
+                    $this->data_rows = $this->fetchDataTable($this->data, $class_row);
+
+                } elseif ($this->query) {
+                    $this->data_rows = $this->fetchDataQuery($this->query, $class_row);
+                }
             }
+
+        } catch (\Exception $e) {
+            $this->session->table->search           = [];
+            $this->session->table->filter           = [];
+            $this->session->table->columns          = null;
+            $this->session->table->order            = null;
+            $this->session->table->order_type       = null;
+            $this->session->table->records_per_page = null;
+
+            $this->saveTableState();
+            throw $e;
         }
 
         return $this->data_rows;
@@ -156,24 +198,27 @@ class Db extends Table {
 
     /**
      * @param \Zend_Db_Table_Abstract $table
+     * @param string                  $record_class
      * @return array
+     * @throws \DateMalformedStringException
      * @throws \Zend_Db_Select_Exception
      */
-    private function fetchDataTable(\Zend_Db_Table_Abstract $table): array {
+    private function fetchDataTable(\Zend_Db_Table_Abstract $table, string $record_class = Row::class): array {
 
         $select = $table->select();
 
-        return $this->fetchDataSelect($select);
+        return $this->fetchDataSelect($select, $record_class);
     }
 
 
     /**
      * @param \Zend_Db_Select $select
+     * @param string          $record_class
      * @return array
+     * @throws \DateMalformedStringException
      * @throws \Zend_Db_Select_Exception
-     * @throws \Exception
      */
-    private function fetchDataSelect(\Zend_Db_Select $select): array {
+    private function fetchDataSelect(\Zend_Db_Select $select, string $record_class = Row::class): array {
 
         if ( ! empty($this->session->table->search)) {
             foreach ($this->session->table->search as $key => $value) {
@@ -182,12 +227,16 @@ class Db extends Table {
                     $this->search_controls[$key] instanceof Search &&
                     ! empty($value)
                 ) {
-                    $field = $this->search_controls[$key]->getField();
-                    $type  = $this->search_controls[$key]->getType();
+                    $search_field = $this->search_controls[$key];
+
+                    $field = $search_field->getField();
+                    $type  = $search_field->getType();
 
                     if (strpos($field, '/*ADD_SEARCH*/') !== false) {
                         $field = str_replace("/*ADD_SEARCH*/", "ADD_SEARCH", $field);
                     }
+
+                    $value = $this->formatSearchType($type, $value);
 
                     switch ($type) {
                         case self::SEARCH_TEXT:
@@ -213,12 +262,18 @@ class Db extends Table {
                         case self::SEARCH_TEXT_STRICT:
                         case self::SEARCH_SELECT:
                         case self::SEARCH_SELECT2:
+                            $type = null;
+
+                            if ($search_field->getValueType() == $search_field::TYPE_INT) {
+                                $type = \Zend_Db::INT_TYPE;
+                            }
+
                             if (strpos($field, 'ADD_SEARCH') !== false) {
-                                $quoted_value = $this->db->quote($value);
+                                $quoted_value = $this->db->quote($value, $type);
                                 $select->where(str_replace("ADD_SEARCH", $quoted_value, $field));
 
                             } else {
-                                $select->where("{$field} = ?", $value);
+                                $select->where("{$field} = ?", $value, $type);
                             }
                             break;
 
@@ -283,7 +338,21 @@ class Db extends Table {
                         $field = str_replace("/*ADD_SEARCH*/", "ADD_SEARCH", $field);
                     }
 
+                    $value = $this->formatSearchType($type, $value);
+
                     switch ($type) {
+
+                        case self::FILTER_MATCH:
+                            $filter_value = trim($value);
+                            if ($filter_value != '') {
+                                $quoted_value = str_replace(['+', '-', '<', '>', '(', ')', '~', '*', '"'], '', $filter_value);
+                                $quoted_value = explode(' ', $quoted_value);
+                                $quoted_value = array_filter($quoted_value);
+                                $quoted_value = array_reduce($quoted_value, fn($carry, $item) => $carry .' +' . $item . '*' , '');
+                                $select->where("MATCH({$field}) AGAINST ('{$quoted_value}' IN BOOLEAN MODE)");
+                            }
+                            break;
+
                         case self::FILTER_TEXT:
                             $value = trim($value);
 
@@ -299,7 +368,6 @@ class Db extends Table {
                                 $select->where("{$field} LIKE ?", "%{$value}%");
                             }
                             break;
-
                         case self::FILTER_DATE_ONE:
                         case self::FILTER_TEXT_STRICT:
                         case self::FILTER_RADIO:
@@ -490,7 +558,7 @@ class Db extends Table {
         $data_rows = [];
         if ( ! empty($data_result)) {
             foreach ($data_result as $row) {
-                $data_rows[] = new Row($row);
+                $data_rows[] = new $record_class($row);
             }
         }
 
@@ -500,11 +568,12 @@ class Db extends Table {
 
     /**
      * Получение данных по запросу sql
-     * @param $query
+     * @param        $query
+     * @param string $record_class
      * @return array
-     * @throws \Exception
+     * @throws \DateMalformedStringException
      */
-    private function fetchDataQuery($query): array {
+    private function fetchDataQuery($query, string $record_class = Row::class): array {
 
         $select = new Table\Db\Select($query);
 
@@ -520,6 +589,8 @@ class Db extends Table {
                     if (strpos($search_field, '/*ADD_SEARCH*/') !== false) {
                         $search_field = str_replace("/*ADD_SEARCH*/", "ADD_SEARCH", $search_field);
                     }
+
+                    $search_value = $this->formatSearchType($search_column->getType(), $search_value);
 
                     switch ($search_column->getType()) {
                         case self::SEARCH_DATE:
@@ -558,8 +629,14 @@ class Db extends Table {
                         case self::SEARCH_RADIO:
                         case self::SEARCH_SELECT:
                         case self::SEARCH_SELECT2:
+                            $type = null;
+
+                            if ($search_column->getValueType() === $search_column::TYPE_INT) {
+                                $type = \Zend_Db::INT_TYPE;
+                            }
+
                             if ($search_value != '') {
-                                $quoted_value = $db->quote($search_value);
+                                $quoted_value = $db->quote($search_value, $type);
 
                                 if (strpos($search_field, 'ADD_SEARCH') !== false) {
                                     $select->addWhere(str_replace("ADD_SEARCH", $quoted_value, $search_field));
@@ -621,6 +698,8 @@ class Db extends Table {
                     if (strpos($filter_field, '/*ADD_SEARCH*/') !== false) {
                         $filter_field = str_replace("/*ADD_SEARCH*/", "ADD_SEARCH", $filter_field);
                     }
+
+                    $search_value = $this->formatSearchType($filter_column->getType(), $filter_value);
 
                     switch ($filter_column->getType()) {
                         case self::FILTER_DATE:
@@ -722,6 +801,16 @@ class Db extends Table {
                                 }
                             }
                             break;
+
+                        case self::FILTER_MATCH:
+                            if ($filter_value != '') {
+                                $quoted_value = str_replace(['+', '-', '<', '>', '(', ')', '~', '*', '"'], '', $filter_value);
+                                $quoted_value = explode(' ', $quoted_value);
+                                $quoted_value = array_filter($quoted_value);
+                                $quoted_value = array_reduce($quoted_value, fn($carry, $item) => $carry .' +' . $item . '*' , '');
+                                $select->addWhere("MATCH({$filter_field}) AGAINST ('{$quoted_value}' IN BOOLEAN MODE)");
+                            }
+                            break;
                     }
                 }
             }
@@ -729,13 +818,14 @@ class Db extends Table {
 
 
         if (empty($this->table)) {
-            $this->table = $select->getTable();
+            $this->table                = $select->getTable();
+            $this->session->table->name = $this->table;
         }
 
         //проверка наличия полей для последовательности и автора
         if ($this->table) {
             $table_columns = $this->db->describeTable(trim($this->table, '`'));
-
+            if (!$this->primary_key) $this->setPrimaryKey('id');
             if (isset($table_columns['seq'])) {
                 $this->records_seq = true;
             }
@@ -830,15 +920,36 @@ class Db extends Table {
 
             $this->query_result = $select_sql;
 
-            $result = $db->fetchAll($select_sql, $this->query_params);
-            $this->records_total = $db->fetchOne("SELECT FOUND_ROWS()");
+            if ($this->cachable) {
+                $cache_key = $this->table . ":" . md5(json_encode($this->query_params + [$select_sql]));
+
+                if ($this->cache->hasItem($cache_key)) {
+                    $cache_data          = $this->cache->getItem($cache_key);
+                    $this->records_total = $cache_data['records_total'] ?? 0;
+                    $result              = $cache_data['data'] ?? [];
+                }
+
+                if ( ! isset($cache_data)) {
+                    $result = $db->fetchAll($select_sql, $this->query_params);
+                    $this->records_total = $db->fetchOne("SELECT FOUND_ROWS()");
+
+                    $this->cache->setItem($cache_key, [
+                        'data'          => $result,
+                        'records_total' => $this->records_total,
+                    ]);
+                }
+
+            } else {
+                $result              = $db->fetchAll($select_sql, $this->query_params);
+                $this->records_total = $db->fetchOne("SELECT FOUND_ROWS()");
+            }
         }
 
 
         $data_rows = [];
         if ( ! empty($result)) {
             foreach ($result as $key => $row) {
-                $data_rows[$key] = new Row($row);
+                $data_rows[$key] = new $record_class($row);
             }
         }
 
@@ -877,5 +988,78 @@ class Db extends Table {
         }
 
         return $result;
+    }
+
+
+    /**
+     * Форматирование поисковых данных
+     * @param string $type
+     * @param mixed  $search_value
+     * @return string
+     */
+    private function formatSearchType(string $type, mixed $search_value): mixed {
+
+        // Проверка формата
+        switch ($type) {
+            case self::SEARCH_DATE:
+            case self::FILTER_DATE:
+                if ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[0])) {
+                    $search_value[0] = '';
+                }
+                if ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[1])) {
+                    $search_value[1] = '';
+                }
+                break;
+
+            case self::SEARCH_DATETIME:
+            case self::FILTER_DATETIME:
+                if ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[0])) {
+                    $search_value[0] = '';
+                }
+                if ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[1])) {
+                    $search_value[1] = '';
+                }
+                break;
+
+            case self::SEARCH_DATE_ONE:
+            case self::FILTER_DATE_ONE:
+                if ( ! empty($search_value) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value)) {
+                    $search_value = '';
+                }
+                break;
+
+            case self::FILTER_DATE_MONTH:
+                if ( ! empty($search_value) && ! preg_match('~^\d{4}-\d{2}$~', $search_value)) {
+                    $search_value = '';
+                }
+                break;
+        }
+
+        return $search_value;
+    }
+
+    /**
+     * будут ли кешироваться данные таблицы
+     * @param bool $is
+     * @return void
+     */
+    public function setCachable(bool $is = true): void
+    {
+        $this->cachable = $is;
+    }
+
+    /**
+     * Удаляет строку с данными
+     * иногда это нужно
+     * @param int $i
+     * @return bool
+     */
+    public function deleteRow(int $i): bool
+    {
+        if (isset($this->data_rows[$i])) {
+            unset($this->data_rows[$i]);
+            return true;
+        }
+        return false;
     }
 }

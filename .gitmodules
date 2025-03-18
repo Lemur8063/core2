@@ -1,0 +1,3 @@
+[submodule "html/material"]
+	path = html/material
+	url = git@github.com:easterism/core2-front-material.git

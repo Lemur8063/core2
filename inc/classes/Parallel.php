@@ -52,12 +52,7 @@ class Parallel extends Db {
      */
     public function start(\Closure $task_callback = null): array {
 
-        $this->db->closeConnection();
-
-        if ($this->cache->getAdapterName() !== 'Filesystem') {
-            $reg = Registry::getInstance();
-            $reg->set('cache', null);
-        }
+        $this->closeConnections();
 
         $process_count = 0;
         $tasks_result  = [];
@@ -78,8 +73,9 @@ class Parallel extends Db {
                         }
 
                         $tasks_result[$response['id']] = [
-                            'buffer' => $response['buffer'],
-                            'result' => $response['result']
+                            'buffer'   => $response['buffer'],
+                            'result'   => $response['result'],
+                            'duration' => $response['duration'],
                         ];
 
                         if ($task_callback instanceof \Closure) {
@@ -94,18 +90,16 @@ class Parallel extends Db {
                             unset($this->tasks[$response['id']]);
                         }
                     }
+
+                    $process_count -= count($responses);
                 }
-
-                $process_count--;
             }
-
 
             $pid = $this->startTask($task_id, $task, $socket_child, $socket_parent);
             $tasks_pid[$pid] = $pid;
 
             $process_count++;
         }
-
 
         while (count($tasks_pid)) {
             if ($responses = $this->waitResponses($socket_child)) {
@@ -116,8 +110,9 @@ class Parallel extends Db {
                     }
 
                     $tasks_result[$response['id']] = [
-                        'buffer' => $response['buffer'],
-                        'result' => $response['result']
+                        'buffer'   => $response['buffer'],
+                        'result'   => $response['result'],
+                        'duration' => $response['duration'],
                     ];
 
                     if ($task_callback instanceof \Closure) {
@@ -138,9 +133,39 @@ class Parallel extends Db {
 
         $this->tasks = [];
 
-        $this->db;
-
         return $tasks_result;
+    }
+
+
+    /**
+     * Отключение от внешних сервисов
+     * @return void
+     */
+    private function closeConnections(): void {
+
+        $this->db->closeConnection();
+
+        $key = "all_modules_" . $this->config->database->params->dbname;
+
+        if ($this->cache->hasItem($key)) {
+            $modules = $this->cache->getItem($key);
+
+            $reg = Registry::getInstance();
+            foreach ($modules as $module_name => $module) {
+                if ($reg->isRegistered("db|{$module_name}")) {
+                    $db = $reg->get("db|{$module_name}");
+
+                    if ($db instanceof \Zend_Db_Adapter_Abstract && $db->isConnected()) {
+                        $db->closeConnection();
+                    }
+                }
+            }
+        }
+
+        if ($this->cache->getAdapterName() !== 'Filesystem') {
+            $reg = Registry::getInstance();
+            $reg->set('cache', null);
+        }
     }
 
 
@@ -158,10 +183,11 @@ class Parallel extends Db {
 
             if ( ! empty($response['id'])) {
                 $task_results[] = [
-                    'id'     => $response['id'],
-                    'pid'    => $response['pid'],
-                    'buffer' => $response['buffer'],
-                    'result' => $response['result'],
+                    'id'       => $response['id'],
+                    'pid'      => $response['pid'],
+                    'buffer'   => $response['buffer'],
+                    'result'   => $response['result'],
+                    'duration' => $response['duration'],
                 ];
 
                 pcntl_waitpid($response['pid'], $status);
@@ -197,8 +223,10 @@ class Parallel extends Db {
             ob_start();
             socket_close($socket_child);
 
+            $start = microtime(true);
+
             // Самостоятельное завершение процесса перед выходом, иначе процесс будет закрыт вместе с родителем,
-            register_shutdown_function(function () use ($task_id, $socket_parent) {
+            register_shutdown_function(function () use ($task_id, $socket_parent, $start) {
                 $buffer = ob_get_clean();
 
                 $error = error_get_last();
@@ -209,14 +237,14 @@ class Parallel extends Db {
                     ])
                 ) {
                     $this->sendSocketData($socket_parent, [
-                        'id'     => $task_id,
-                        'pid'    => posix_getpid(),
-                        'buffer' => (string)$buffer,
-                        'result' => null,
+                        'id'       => $task_id,
+                        'pid'      => posix_getpid(),
+                        'buffer'   => (string)$buffer,
+                        'duration' => round(microtime(true) - $start, 4),
+                        'result'   => null,
                     ]);
                 }
             });
-
 
             try {
                 $result_value = $task();
@@ -230,10 +258,11 @@ class Parallel extends Db {
             }
 
             $this->sendSocketData($socket_parent, [
-                'id'     => $task_id,
-                'pid'    => posix_getpid(),
-                'buffer' => (string)ob_get_clean(),
-                'result' => $result_value,
+                'id'       => $task_id,
+                'pid'      => posix_getpid(),
+                'buffer'   => (string)ob_get_clean(),
+                'duration' => round(microtime(true) - $start, 4),
+                'result'   => $result_value,
             ]);
 
             // Завершение дочернего процесса
@@ -267,6 +296,7 @@ class Parallel extends Db {
      * @param \Socket $socket
      * @param mixed   $data
      * @return void
+     * @throws \Exception
      */
     private function sendSocketData(\Socket $socket, mixed $data): void {
 

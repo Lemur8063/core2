@@ -261,7 +261,9 @@ var listx = {
 		}
 		return val;
 	},
-	del: function (id, text, isAjax) {
+	del: function (res, text, isAjax) {
+		res = res.split('.');
+		var id = res[0];
 		var val = this.getCheked(id, true);
 		if (val) {
 			if (val.length) {
@@ -274,24 +276,34 @@ var listx = {
 						$.ajax({
 							method: "DELETE",
 							dataType: "json",
-							url: "index.php?res=" + id + "&id=" + val,
-							success: function (data) {
-								if (data == true) {
-									load(listx.loc[id], '', container);
-								} else {
-									if (!data || data.error) {
-										var msg = data.error ? data.error : "Не удалось выполнить удаление";
-										$("#main_" + id + "_error").html(msg);
-										$("#main_" + id + "_error").show();
-									} else {
-										if (data.alert) {
-											alert(data.alert);
-										}
-										if (data.loc) {
-											load(data.loc, '', container);
-										}
+							data: {key: res[1] + "." + res[2], id: val},
+							url: "admin/index/delete/" + id
+						}).success(function (data) {
+							if (data && data.error) {
+								var msg = data.error ? data.error : "Не удалось выполнить удаление";
+								$("#main_" + id + "_error").html(msg);
+								$("#main_" + id + "_error").show();
+							} else {
+								var loc = listx.loc[id];
+								if (data) {
+									if (data.notice) {
+										CoreUI.notice.create(data.notice);
 									}
+									if (data.alert) {
+										alert(data.alert);
+									}
+									if (data.loc) loc = data.loc;
 								}
+								load(loc, '', container, function () {
+									if (listx.reloadEvents.length > 0) {
+										$.each(listx.reloadEvents, function () {
+											if (this.list_id === id) {
+												this.func();
+											}
+										})
+									}
+									preloader.callback();
+								});
 							}
 						}).fail(function () {
 							alert("Не удалось выполнить удаление");

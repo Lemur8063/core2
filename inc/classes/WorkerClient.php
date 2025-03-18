@@ -26,23 +26,24 @@ class WorkerClient {
                 throw new \Exception('Class GearmanClient not found');
             }
 
-            $host = explode(":", trim($cc->gearman->host));
-            if (!isset($host[1])) $host[1] = $cc->gearman->port;
-
-            $this->client = new \GearmanClient();
-            if (defined('GEARMAN_CLIENT_NON_BLOCKING')) $this->client->addOptions(GEARMAN_CLIENT_NON_BLOCKING);
-
             try {
                 $c = new \GearmanClient();
-                $c->addServer($host[0], $host[1], false);
+                $c->setTimeout(500);
+                if (defined('GEARMAN_CLIENT_NON_BLOCKING')) {
+                    $c->addOptions(GEARMAN_CLIENT_NON_BLOCKING);
+                }
+                $c->addServers($cc->gearman->host);
                 //$this->assignCallbacks();
                 if (@$c->ping('ping')) {
-                    $this->client->addServers($host[0], $host[1]);
+                    $this->client = $c;
                 } else {
                     (new Log())->error("Job server not available");
                     return new \stdObject();
                 }
             } catch (\GearmanException $e) {
+                (new Log())->error($e->getMessage());
+                return new \stdObject();
+            } catch (\Exception $e) {
                 return new \stdObject();
             }
 
@@ -120,13 +121,18 @@ class WorkerClient {
         if (empty($this->client)) {
             return false;
         }
+        $success = @$this->client->ping('ping');
+        if (!$success) {
+            (new Log())->error("Job server return " . $this->client->returnCode());
+            return false;
+        }
 
         $workload = $this->getWorkload($worker, $data);
         $worker   = $this->getWorkerName($worker);
 
-        if (!$workload) return false;
+        if (!$workload) return false; //TODO log me
 
-        $jh = $this->client->doBackground($worker, $workload, $unique);
+        $jh = $this->client->doBackground($worker, json_encode($workload) . "|", $unique);
 
         if ( ! defined("GEARMAN_SUCCESS") || $this->client->returnCode() != GEARMAN_SUCCESS) {
             (new Log())->error("Job server return " . $this->client->returnCode());
@@ -148,7 +154,9 @@ class WorkerClient {
         $workload = $this->getWorkload($worker, $data);
         $worker   = $this->getWorkerName($worker);
 
-        $jh = $this->client->doHighBackground($worker, $workload, $unique);
+        if (!$workload) return false; //TODO log me
+
+        $jh = $this->client->doHighBackground($worker, json_encode($workload) . "|", $unique);
 
         if ( ! defined("GEARMAN_SUCCESS") || $this->client->returnCode() != GEARMAN_SUCCESS) {
             (new Log())->error("Job server return " . $this->client->returnCode());
@@ -165,7 +173,7 @@ class WorkerClient {
      * @param $data
      * @return false|string
      */
-    private function getWorkload($worker, $data) {
+    private function getWorkload($worker, $data): array {
 
         $auth = Registry::get('auth');
         $dt   = new \DateTime();
@@ -180,19 +188,15 @@ class WorkerClient {
             'server'   => $_SERVER,
             'auth'     => $auth_data,
             'payload'  => $data,
-            'doc_root'  => DOC_ROOT,
         ];
 
         if ($this->module !== 'Admin') {
-            $workload += [
+            $workload = array_merge($workload, [
                 'module'    => $this->module,
-                'doc_root'  => DOC_ROOT,
-                'context'   => Registry::get('context'),
-                'translate' => serialize(Registry::get('translate')),
                 'worker'    => $worker
-            ];
+            ]);
         }
-        return json_encode($workload);
+        return $workload;
     }
 
     public function jobStatus($job_handle) {

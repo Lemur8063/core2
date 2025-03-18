@@ -1,10 +1,13 @@
 <?php
 require_once("class.ini.php");
 require_once 'Templater3.php';
+require_once __DIR__ . '/../Traits/Import.php';
 
 use Laminas\Session\Container as SessionContainer;
 use Core2\Tool;
 use Core2\Registry;
+use Core2\Traits;
+use Core2\Theme;
 
 $counter = 0;
 
@@ -13,6 +16,8 @@ $counter = 0;
  * @property Core2\Acl $acl
  */
 class editTable extends initEdit {
+
+    use Traits\Import;
 
     public    $selectSQL           = [];
     public    $buttons             = [];
@@ -33,10 +38,56 @@ class editTable extends initEdit {
     private   $isSaved             = false;
     private   $form_leave_checking = false;
     private   $scripts             = [];
-    private   $sess_form           = '';
     private   $sess_form_custom    = [];
+    private   $read_only_fields    = [];
     private   $uniq_class_id       = '';
 
+
+    const TYPE_TEXT           = 'text';
+    const TYPE_HIDDEN         = 'hidden';
+    const TYPE_NUMBER         = 'number';
+    const TYPE_NUMBER_RANGE   = 'number_range';
+    const TYPE_MONEY          = 'money';
+    const TYPE_TEXTAREA       = 'textarea';
+    const TYPE_FCK            = 'fck';
+    const TYPE_PASSWORD       = 'password';
+    const TYPE_RADIO          = 'radio';
+    const TYPE_RADIO2         = 'radio2';
+    const TYPE_CHECKBOX       = 'checkbox';
+    const TYPE_CHECKBOX2      = 'checkbox2';
+    const TYPE_SELECT         = 'select';
+    const TYPE_SELECT2        = 'select2';
+    const TYPE_MULTILIST      = 'multilist';
+    const TYPE_MULTILIST2     = 'multilist2';
+    const TYPE_MULTILIST3     = 'multilist3';
+    const TYPE_MULTISELECT2   = 'multiselect2';
+    const TYPE_TAGS           = 'tags';
+    const TYPE_DATASET        = 'dataset';
+    const TYPE_FILE           = 'file';
+    const TYPE_XFILE          = 'xfile';
+    const TYPE_XFILE_AUTO     = 'xfile_auto';
+    const TYPE_XFILES         = 'xfiles';
+    const TYPE_XFILES_AUTO    = 'xfiles_auto';
+    const TYPE_LINK           = 'link';
+    const TYPE_PROTECTED      = 'protected';
+    const TYPE_CUSTOM         = 'custom';
+    const TYPE_DATE           = 'date';
+    const TYPE_DATE2          = 'date2';
+    const TYPE_DATETIME       = 'datetime';
+    const TYPE_DATETIME2      = 'datetime2';
+    const TYPE_DATETIME_LOCAL = 'datetime_local';
+    const TYPE_DATE_WEEK      = 'date_week';
+    const TYPE_DATE_MONTH     = 'date_month';
+    const TYPE_DATE_RANGE     = 'daterange';
+    const TYPE_TIME           = 'time';
+    const TYPE_COLOR          = 'color';
+    const TYPE_COORDINATES    = 'coordinates';
+    const TYPE_SWITCH         = 'switch';
+    const TYPE_COMBOBOX       = 'combobox';
+    const TYPE_MODAL          = 'modal';
+    const TYPE_MODAL2         = 'modal2';
+    const TYPE_MODAL_LIST     = 'modal_list';
+    const THEME_HTML          = 'core2/html/' . THEME;
 
     /**
      * form action attribute
@@ -46,6 +97,7 @@ class editTable extends initEdit {
     private $acl;
 
     private $tpl_control = [
+        'files'          => __DIR__ . '/../../html/' . THEME . '/html/edit/files.html',
         'xfile_upload'   => __DIR__ . '/../../html/' . THEME . '/html/edit/file_upload.html',
         'xfile_download' => __DIR__ . '/../../html/' . THEME . '/html/edit/file_download.html',
         'dataset'        => __DIR__ . '/../../html/' . THEME . '/html/edit/dataset.html',
@@ -58,6 +110,7 @@ class editTable extends initEdit {
         'color'          => __DIR__ . '/../../html/' . THEME . '/html/edit/color.html',
         'modal'          => __DIR__ . '/../../html/' . THEME . '/html/edit/modal_list.html',
         'modal2'         => __DIR__ . '/../../html/' . THEME . '/html/edit/modal2.html',
+        'coordinates'    => __DIR__ . '/../../html/' . THEME . '/html/edit/coordinates.html',
     ];
 
 
@@ -71,7 +124,7 @@ class editTable extends initEdit {
 		$this->resource 		= $name;
 		$this->main_table_id 	= "main_" . $name;
 		$this->template 		= '<div id="' . $this->main_table_id . '_default">[default]</div>';
-		$this->uniq_class_id   	= $name; //crc32($name);
+		$this->uniq_class_id   	= $name;
 
 		global $counter;
 		$counter = 0;
@@ -79,14 +132,15 @@ class editTable extends initEdit {
 		foreach ($this->types as $acl_type) {
 			$this->acl->$acl_type = $this->checkAcl($this->resource, $acl_type);
 		}
-        $this->setTemplateControl('xfile', \Core2\Theme::get("html-edit-files"));
+        $this->setTemplateControl('xfile', Theme::get("html-edit-files"));
         //TODO заполнить остальные шаблоны из модели шкурки (или прописать напрямую из \Core2\Theme)
     }
 
 
     /**
      * @param string $data
-     * @return cell|Zend_Db_Adapter_Abstract
+     * @return cell|mixed
+     * @throws Zend_Exception
      */
 	public function __get($data) {
         if ($data === 'db' || $data === 'cache' || $data === 'translate') {
@@ -101,58 +155,114 @@ class editTable extends initEdit {
 	/**
 	 * set HTML layout for the form
 	 * @param string $html
+     * @return $this
 	 */
-	public function setTemplate($html) {
+	public function setTemplate($html): self {
 		$this->template = $html;
+        return $this;
 	}
+
 
     /**
      * set custom filename for any form control
      * @param $type - form control type
      * @param $filename - absolute path to the file
-     * @return void
+     * @return $this
      */
-    public function setTemplateControl($type, $filename) {
+    public function setTemplateControl($type, $filename): self {
         if (is_file($filename)) {
             $this->tpl_control[$type] = $filename;
         }
+        return $this;
     }
-	
-		
+
+
+    /**
+     * Установка формы в состояние только для чтения
+     * @param bool $is_readonly
+     * @return void
+     */
+    public function setReadonly(bool $is_readonly): void {
+
+        $this->readOnly = $is_readonly;
+    }
+
+
+    /**
+     * Установка списка полей которые должны быть в состоянии только для чтения
+     * @param array $fields
+     * @return void
+     */
+    public function setReadonlyFields(array $fields): void {
+
+        $this->clearReadonlyFields();
+        $this->addReadonlyFields($fields);
+    }
+
+
+    /**
+     * Добавление полей которые должны быть в состоянии только для чтения
+     * @param array $fields
+     * @return void
+     */
+    public function addReadonlyFields(array $fields): void {
+
+        foreach ($fields as $field) {
+            if (is_string($field) && $field) {
+                $this->read_only_fields[] = $field;
+            }
+        }
+    }
+
+
+    /**
+     * Очистка списка полей которые должны быть в состоянии только для чтения
+     * @return void
+     */
+    public function clearReadonlyFields(): void {
+
+        $this->read_only_fields = [];
+    }
+
+
 	/**
-	 * 
 	 * Add new control to the form
-	 * @param string $name - field caption
-	 * @param string $type - type of control (TEXT, LIST, RADIO, CHECKBOX, FILE)
-	 * @param string/array $in - field attributes
-	 * @param string $out - outside HTML
-	 * @param string $default - value by default
-	 * @param string $req - is field required
+	 * @param string       $name    - field caption
+	 * @param string       $type    - type of control (TEXT, LIST, RADIO, CHECKBOX, FILE)
+	 * @param string|array $in      - field attributes
+	 * @param string       $out     - outside HTML
+	 * @param string       $default - value by default
+	 * @param string       $req     - is field required
+     * @return $this
 	 */
-	public function addControl($name, $type, $in = "", $out = "", $default = "", $req = false) {
+	public function addControl($name, $type, $in = "", $out = "", $default = "", $req = false): self {
 		global $counter;
 		if (empty($this->cell['default'])) {
 			$c = new cell($this->main_table_id);
 			$c->addControl($name, $type, $in, $out, $default, $req);
 			$this->cell['default'] = $c;
 		} else {
-			$temp = array(
-				'name' 		=> $name, 
-				'type' 		=> strtolower($type), 
-				'in' 		=> $in, 
-				'out' 		=> $out, 
-				'default' 	=> $default, 
-				'req' 		=> $req
-			);
-			$this->cell['default']->appendControl($temp);
-		}
+            $temp = [
+                'name'    => $name,
+                'type'    => strtolower($type),
+                'in'      => $in,
+                'out'     => $out,
+                'default' => $default,
+                'req'     => $req,
+            ];
+            $this->cell['default']->appendControl($temp);
+        }
+
+        return $this;
 	}
 
-	/**
-	 * @param $name
-	 * @param bool $collapsed
-	 */
-	public function addGroup($name, $collapsed = false) {
+
+    /**
+     * @param $name
+     * @param $collapsed
+     * @return $this
+     */
+	public function addGroup($name, $collapsed = false): self {
 		global $counter;
 		if (empty($this->cell['default'])) {
 			$c = new cell($this->main_table_id);
@@ -166,24 +276,30 @@ class editTable extends initEdit {
 				$this->cell['default']->setGroup(array(0 => $collapsed . $name));
 			}
 		}
-		
+
+        return $this;
 	}
 
-	/**
-	 * @param $value
-	 * @param string $action
-	 */
-	public function addButton($value, $action = '') {
-		$this->buttons[$this->main_table_id][] = array('value' => $value, 'action' => $action);
-	}
 
-	/**
-	 *
-	 * Create button for switch fields, based on values Y/N
-	 * @param string $field_name - name of field
-	 * @param string $value - switch ON or OFF
-	 */
-	public function addButtonSwitch($field_name, $value) {
+    /**
+     * @param $value
+     * @param $action
+     * @return $this
+     */
+	public function addButton($value, $action = ''): self {
+        $this->buttons[$this->main_table_id][] = ['value' => $value, 'action' => $action];
+
+        return $this;
+    }
+
+
+    /**
+     * Create button for switch fields, based on values Y/N
+     * @param string $field_name - name of field
+     * @param string $value      - switch ON or OFF
+     * @throws Exception
+     */
+    public function addButtonSwitch($field_name, $value): self {
 		$tpl = new Templater3($this->tpl_control['switch_button']);
 		if ($value) {
 			$tpl->assign('data-switch="off"', 'data-switch="off" class="hide"');
@@ -197,34 +313,79 @@ class editTable extends initEdit {
 		$html  = '<input type="hidden" id="' . $id . 'hid" name="control[' . $field_name . ']" value="' . $valueInput . '"/>';
 		$html .= $tpl->render();
 		$this->addButtonCustom($html);
+
+        return $this;
 	}
 
-	/**
-	 * @param string $html
-	 */
-	public function addButtonCustom($html = '') {
+
+    /**
+     * @param $html
+     * @return $this
+     */
+	public function addButtonCustom($html = ''): self {
 		$this->buttons[$this->main_table_id][] = array('html' => $html);
+        return $this;
 	}
-	
-	/**
-	 * сохранение значения в служебных полях формы
-	 * @param $id
-	 * @param $value
-	 */
-	public function setSessFormField($id, $value)
-	{
+
+
+    /**
+     * сохранение значения в служебных полях формы
+     * @param $id
+     * @param $value
+     * @return editTable
+     */
+	public function setSessFormField($id, $value): self {
+
         $this->sess_form_custom[$id] = $value;
+        return $this;
 	}
 
 
     /**
      * Установка проверять ли изменения на форме при уходе со страницы
      * @param bool $leave_checking
-     * @return void
+     * @return editTable
      */
-    public function setLeaveChecking(bool $leave_checking): void {
+    public function setLeaveChecking(bool $leave_checking): self {
 
         $this->form_leave_checking = $leave_checking;
+        return $this;
+    }
+
+
+    /**
+     * Установка таблицы для формы
+     * @param string $table
+     * @return self
+     */
+    public function setTable(string $table): self {
+
+        $this->table = $table;
+        return $this;
+    }
+
+
+    /**
+     * Установка ширины для названий полей
+     * @param string|int $width
+     * @return self
+     */
+    public function setWidthLabels(string|int $width): self {
+
+        $this->firstColWidth = is_numeric($width) ? "{$width}px" : $width;
+        return $this;
+    }
+
+
+    /**
+     * Установка данных записи
+     * @param array $record
+     * @return self
+     */
+    public function setData(array $record): self {
+
+        $this->SQL = [ $record ];
+        return $this;
     }
 
 
@@ -234,7 +395,7 @@ class editTable extends initEdit {
      * @throws Zend_Db_Adapter_Exception
      * @throws Zend_Exception
      */
-    public function render(array $options = []) {
+    public function render(array $options = []): string {
 
 	    ob_start();
         $this->showTable($options);
@@ -268,7 +429,6 @@ class editTable extends initEdit {
 		} else {
 			$this->noAccess();
 		}
-		return;
 	}
 
 
@@ -276,6 +436,7 @@ class editTable extends initEdit {
      * @throws Zend_Db_Adapter_Exception
      * @throws Zend_Exception
      * @throws Exception
+     * @SuppressWarnings(PHPMD:StaticAccess)
      */
 	public function makeTable() {
 		if (!$this->isSaved) {
@@ -432,27 +593,26 @@ class editTable extends initEdit {
 
 		if (!empty($this->cell)) {
 			foreach ($this->cell as $cellId => $cellFields) {
-				$groups 		= false;
-				//echo "<PRE>";print_r($arr_fields);echo"</PRE>";//die();;
-				//echo "<PRE>";print_r($arr);echo"</PRE>";//die();;
+
 				$controls = $cellFields->controls[$this->main_table_id];
 				if (!empty($controls)) {
 					foreach ($controls as $key => $value) {
 						$controlGroups[$cellId]['html'][$key] = '';
 						if (!empty($value['group'])) {
-							$groups 		= true;
-							$temp = array();
-							$temp['key'] = $key;
-							$temp['collapsed'] = false;
-							$temp['name'] = $value['group'];
-							if (substr($value['group'], 0, 1) == "*") {
-								$temp['collapsed'] = true;
-								$temp['name'] = trim($value['group'], '*');
-							}
-							$controlGroups[$cellId]['group'][] = $temp;
-						}
+                            $temp              = [];
+                            $temp['key']       = $key;
+                            $temp['collapsed'] = false;
+                            $temp['name']      = $value['group'];
 
-						//преобразование массива с атрибутами в строку
+                            if (substr($value['group'], 0, 1) == "*") {
+                                $temp['collapsed'] = true;
+                                $temp['name']      = trim($value['group'], '*');
+                            }
+
+                            $controlGroups[$cellId]['group'][] = $temp;
+                        }
+
+                        //преобразование массива с атрибутами в строку
 						$attrs = $this->setAttr($value['in']);
 
 						$sqlKey = $key + 1;
@@ -520,35 +680,35 @@ class editTable extends initEdit {
 
 						$controlGroups[$cellId]['html'][$key] .= $value['name'] . "</td><td" . ($field ? " id=\"{$this->resource}_cell_$field\"" : "") . ">";
 
-						if ($value['type'] == 'protect' || $value['type'] == 'protected') { //только для чтения
+						if ($value['type'] == 'protect' || $value['type'] == self::TYPE_PROTECTED) { //только для чтения
                             $controlGroups[$cellId]['html'][$key] .= "<span id=\"$fieldId\" {$attrs}>" . $value['default'] . "</span>";
 						}
-						elseif ($value['type'] == 'custom') { // произвольный html
+						elseif ($value['type'] == self::TYPE_CUSTOM) { // произвольный html
 							$controlGroups[$cellId]['html'][$key] .= $attrs;
 						}
 						elseif ($value['type'] == 'text' || $value['type'] == 'edit') { // простое поле
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'];
 							} else {
 								$controlGroups[$cellId]['html'][$key] .= "<input class=\"input\" id=\"$fieldId\" type=\"text\" name=\"control[$field]\" {$attrs} value=\"{$value['default']}\">";
 							}
 						}
-						elseif ($value['type'] == 'time') {
-							if ($this->readOnly) {
+						elseif ($value['type'] == self::TYPE_TIME) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'];
 							} else {
 								$controlGroups[$cellId]['html'][$key] .= "<input class=\"input\" id=\"$fieldId\" type=\"time\" name=\"control[$field]\" {$attrs} value=\"{$value['default']}\">";
 							}
 						}
 						elseif ($value['type'] == 'datetime_local') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'];
 							} else {
 								$controlGroups[$cellId]['html'][$key] .= "<input class=\"input\" id=\"$fieldId\" type=\"datetime-local\" name=\"control[$field]\" {$attrs} value=\"{$value['default']}\">";
 							}
 						}
 						elseif ($value['type'] == 'date_week') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'] ? date('Y.m неделя W', strtotime($value['default'])) : '';
 							} else {
                                 $input_year  = $value['default'] ? date('Y', strtotime($value['default'])) : '';
@@ -559,7 +719,7 @@ class editTable extends initEdit {
 							}
 						}
 						elseif ($value['type'] == 'date_month') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'] ? date('Y.m', strtotime($value['default'])) : '';
 							} else {
                                 $input_value = $value['default'] ? date('Y-m', strtotime($value['default'])) : '';
@@ -567,14 +727,14 @@ class editTable extends initEdit {
 							}
 						}
 						elseif ($value['type'] == 'number') { // только цифры
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'];
 							} else {
-								$controlGroups[$cellId]['html'][$key] .= "<input class=\"input\" id=\"$fieldId\" type=\"text\" name=\"control[$field]\" {$attrs} value=\"{$value['default']}\" onkeypress=\"return checkInt(event);\">";
+                                $controlGroups[$cellId]['html'][$key] .= "<input class=\"input\" id=\"$fieldId\" type=\"text\" name=\"control[$field]\" {$attrs} value=\"{$value['default']}\" onkeypress=\"return checkInt(event);\" onpaste=\"return commaReplace(event);\" >";
 							}
 						}
 						elseif ($value['type'] == 'number_range') { // только цифры
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'];
 							} else {
 								$controlGroups[$cellId]['html'][$key] .= "<input class=\"input\" id=\"{$fieldId}-start\" type=\"text\" name=\"control[$field][0]\" {$attrs} value=\"{$value['default']}\" onkeypress=\"return checkInt(event);\" placeholder=\"от\"> - ";
@@ -582,7 +742,7 @@ class editTable extends initEdit {
 							}
 						}
 						elseif ($value['type'] == 'money') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= Tool::commafy($value['default']);
 							} else {
                                 if (empty($value['default'])) $value['default'] = 0;
@@ -604,7 +764,7 @@ class editTable extends initEdit {
 							$controlGroups[$cellId]['html'][$key] .= "<input id=\"{$fieldId}\" type=\"hidden\" name=\"control[{$field}]\" value=\"{$value['default']}\"/>";
 						}
 						elseif ($value['type'] == 'date' || $value['type'] == 'datetime') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$day	= substr($value['default'], 8, 2);
 								$month 	= substr($value['default'], 5, 2);
 								$year 	= substr($value['default'], 0, 4);
@@ -655,7 +815,7 @@ class editTable extends initEdit {
 							}
 						}
 						elseif ($value['type'] == 'color') {
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $controlGroups[$cellId]['html'][$key] .= $value['default'];
 
                             } else {
@@ -670,8 +830,33 @@ class editTable extends initEdit {
                                 $controlGroups[$cellId]['html'][$key] .= $tpl;
                             }
                         }
-						elseif ($value['type'] == 'switch') {
-                            if ($this->readOnly) {
+						elseif ($value['type'] == self::TYPE_COORDINATES) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
+                                $controlGroups[$cellId]['html'][$key] .= $value['default'];
+
+                            } else {
+                                $this->scripts[self::TYPE_COORDINATES] = true;
+
+                                $settings = is_array($value['in']) ? $value['in'] : [];
+
+                                $tpl = file_get_contents($this->tpl_control[self::TYPE_COORDINATES]);
+                                $tpl = str_replace('[FIELD_ID]',         $fieldId, $tpl);
+                                $tpl = str_replace('[FIELD]',            $field, $tpl);
+                                $tpl = str_replace('[VALUE]',            $value['default'], $tpl);
+                                $tpl = str_replace('[ATTRIBUTES]',       $settings['attr'] ?? '', $tpl);
+                                $tpl = str_replace('[APIKEY]',           $settings['apikey'] ?? '', $tpl);
+                                $tpl = str_replace('[WIDTH]',            $settings['width'] ?? 400, $tpl);
+                                $tpl = str_replace('[HEIGHT]',           $settings['height'] ?? 200, $tpl);
+                                $tpl = str_replace('[ZOOM]',             $settings['zoom'] ?? 7, $tpl);
+                                $tpl = str_replace('[INPUT_ADDRESS_ID]', $settings['input_address_id'] ?? '', $tpl);
+                                $tpl = str_replace('[CENTER_LAT]',       ! empty($settings['center']) && ! empty($settings['center']['lat']) ? $settings['center']['lat'] : '53.908045', $tpl);
+                                $tpl = str_replace('[CENTER_LNG]',       ! empty($settings['center']) && ! empty($settings['center']['lng']) ? $settings['center']['lng'] : '27.507411', $tpl);
+
+                                $controlGroups[$cellId]['html'][$key] .= $tpl;
+                            }
+                        }
+						elseif ($value['type'] == self::TYPE_SWITCH) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $controlGroups[$cellId]['html'][$key] .= $value['default'] == 'Y' ? $this->_('да') : $this->_('нет');
 
                             } else {
@@ -694,7 +879,7 @@ class editTable extends initEdit {
                             }
                         }
 						elseif ($value['type'] == 'combobox') {
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $controlGroups[$cellId]['html'][$key] .= $value['default'];
 
                             } else {
@@ -718,7 +903,7 @@ class editTable extends initEdit {
                             $select++;
                         }
 						elseif ($value['type'] == 'date2') {
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								if ($value['default']) {
                                     $day	= substr($value['default'], 8, 2);
                                     $month 	= substr($value['default'], 5, 2);
@@ -735,7 +920,7 @@ class editTable extends initEdit {
                                 $this->scripts['date2'] = true;
 								$options = is_array($value['in']) ? json_encode($value['in']) : '{}';
                                 $tpl = file_get_contents($this->tpl_control['date2']);
-                                $tpl = str_replace('[THEME_DIR]', 'core2/html/' . THEME,     $tpl);
+                                $tpl = str_replace('[THEME_DIR]', self::THEME_HTML,          $tpl);
                                 $tpl = str_replace('[NAME]',      'control[' . $field . ']', $tpl);
                                 $tpl = str_replace('[DATE]',      $value['default'],         $tpl);
                                 $tpl = str_replace('[OPTIONS]',   $options,                  $tpl);
@@ -744,7 +929,7 @@ class editTable extends initEdit {
                             }
                         }
 						elseif ($value['type'] == 'datetime2') {
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 if ($value['default']) {
                                     $day    = substr($value['default'], 8, 2);
                                     $month  = substr($value['default'], 5, 2);
@@ -763,7 +948,7 @@ class editTable extends initEdit {
                             } else {
                                 $this->scripts['datetime2'] = true;
                                 $tpl = file_get_contents($this->tpl_control['datetime2']);
-                                $tpl = str_replace('[THEME_DIR]', 'core2/html/' . THEME,     $tpl);
+                                $tpl = str_replace('[THEME_DIR]', self::THEME_HTML,          $tpl);
                                 $tpl = str_replace('[NAME]',      'control[' . $field . ']', $tpl);
                                 $tpl = str_replace('[DATE]',      $value['default'],         $tpl);
                                 $tpl = str_replace('[KEY]',       crc32(uniqid('', true)),   $tpl);
@@ -771,7 +956,7 @@ class editTable extends initEdit {
                             }
                         }
 						elseif ($value['type'] == 'modal2') {
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $controlGroups[$cellId]['html'][$key] .= isset($value['in']['text'])
                                     ? htmlspecialchars($value['in']['text'])
                                     : '';
@@ -805,7 +990,7 @@ class editTable extends initEdit {
                                     : "'{$options['url']}'";
 
                                 $tpl = new Templater3($this->tpl_control['modal2']);
-                                $tpl->assign('[THEME_DIR]', 'core2/html/' . THEME);
+                                $tpl->assign('[THEME_DIR]', self::THEME_HTML);
                                 $tpl->assign('[TITLE]',     $options['title']);
                                 $tpl->assign('[TEXT]',      $options['text']);
                                 $tpl->assign('[VALUE]',     $options['value']);
@@ -838,7 +1023,7 @@ class editTable extends initEdit {
                             }
                         }
 						elseif ($value['type'] == 'modal_list') {
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $tpl = new Templater3($this->tpl_control['modal']);
                                 $tpl->assign('[CONTROL]', $field);
 
@@ -892,7 +1077,7 @@ class editTable extends initEdit {
                                     : "'{$options['url']}'";
 
                                 $tpl = new Templater3($this->tpl_control['modal']);
-                                $tpl->assign('[THEME_DIR]', 'core2/html/' . THEME);
+                                $tpl->assign('[THEME_DIR]', self::THEME_HTML);
                                 $tpl->assign('[TITLE]',     $options['title']);
                                 $tpl->assign('[VALUE]',     $options['value']);
                                 $tpl->assign('[URL]',       $url);
@@ -950,8 +1135,8 @@ class editTable extends initEdit {
                         }
                         elseif ($value['type'] == 'daterange') {
 							$dates = explode(" - ", $value['default']);
-							//echo "<pre>"; print_r($value['default']); die;
-							if ($this->readOnly) {
+
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$day	= substr($dates[0], 8, 2);
 								$month 	= substr($dates[0], 5, 2);
 								$year 	= substr($dates[0], 0, 4);
@@ -998,7 +1183,7 @@ class editTable extends initEdit {
 							}
 						}
 						elseif ($value['type'] == 'password') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= "*****";
 							} else {
 								if ($value['default']) {
@@ -1019,14 +1204,14 @@ class editTable extends initEdit {
 							}
 						}
 						elseif ($value['type'] == 'textarea') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= $value['default'] ? "<div>" . nl2br(htmlspecialchars_decode($value['default'])) . "</div>" : '';
 							} else {
 								$controlGroups[$cellId]['html'][$key] .= "<textarea id=\"" . $fieldId . "\" name=\"control[$field]\" ".$attrs.">{$value['default']}</textarea>";
 							}
 						}
 						elseif (strpos($value['type'], 'fck') === 0) {
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $field_content = htmlspecialchars_decode($value['default']);
 
                                 if ( ! empty($field_content) && strlen($field_content) > 0) {
@@ -1086,8 +1271,8 @@ class editTable extends initEdit {
 									$temp[] = array(current($values), end($values));
 								}
 							}
-							//READONLY FORK
-							if ($this->readOnly) {
+
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								foreach ($temp as $row) {
 									if ($row[0] == $value['default']) {
 										$controlGroups[$cellId]['html'][$key] .= $row[1];
@@ -1126,8 +1311,8 @@ class editTable extends initEdit {
 									$temp[] = array(current($values), end($values));
 								}
 							}
-							//READONLY FORK
-							if ($this->readOnly) {
+
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								foreach ($temp as $row) {
 									if ($row[0] == $value['default']) {
 										$controlGroups[$cellId]['html'][$key] .= $row[1];
@@ -1156,7 +1341,7 @@ class editTable extends initEdit {
 									$temp[] = array($k, $v);
 								}
 							} else {
-							    $sql = $this->replaceTCOL(isset($arr[0]) ? $arr[0] : '');
+							    $sql = $this->replaceTCOL(isset($arr[0]) ? $arr[0] : '', $this->selectSQL[$select]);
 							    if ($sql) {
                                     $data = $this->db->fetchAll($sql, $this->selectSQL[$select]);
                                     foreach ($data as $values) {
@@ -1165,7 +1350,7 @@ class editTable extends initEdit {
                                 }
 							}
 							$temp1 = is_array($value['default']) ? $value['default'] : explode(",", $value['default']);
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								foreach ($temp as $row) {
 									if (in_array($row[0], $temp1)) {
 										$controlGroups[$cellId]['html'][$key] .= "<div>{$row[1]}</div>";
@@ -1199,7 +1384,7 @@ class editTable extends initEdit {
 								}
 							}
 							$temp1 = is_array($value['default']) ? $value['default'] : explode(",", $value['default']);
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								foreach ($temp as $row) {
 									if (in_array($row[0], $temp1)) {
 										$controlGroups[$cellId]['html'][$key] .= "<div>{$row[1]}</div>";
@@ -1245,7 +1430,7 @@ class editTable extends initEdit {
                             if ( ! is_array($value['default'])) {
                                 $value['default'] = explode(",", (string)$value['default']);
                             }
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 if ($value['type'] == 'multilist') {
                                     $out_array = [];
                                     foreach ($temp as $row) {
@@ -1310,10 +1495,21 @@ class editTable extends initEdit {
                             if (is_array($this->selectSQL[$select])) {
                                 foreach ($this->selectSQL[$select] as $k => $v) {
                                     if (is_array($v)) {
-                                        $options_group = array_values($v);
+                                        if ( ! empty($v['title'])) {
+                                            $options[$k] = $v;
+                                        } else {
+                                            $options_group = array_values($v);
 
-                                        if (isset($options_group[2])) {
-                                            $options[$options_group[2]][$options_group[0]] = $options_group[1];
+                                            if (isset($options_group[2]) && is_scalar($options_group[2])) {
+                                                $options[$options_group[2]][$options_group[0]] = $options_group[1];
+                                            } else {
+                                                foreach ($v as $item) {
+                                                    if ( ! empty($item['title'])) {
+                                                        $options[$k] = $v;
+                                                        break;
+                                                    }
+                                                }
+                                            }
                                         }
                                     } else {
                                         $options[$k] = $v;
@@ -1321,11 +1517,15 @@ class editTable extends initEdit {
                                 }
                             }
 
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $options_out = '';
                                 foreach ($options as $options_key => $options_value) {
                                     if (is_array($options_value)) {
-                                        if (isset($options_value[$value['default']])) {
+                                        if ( ! empty($options_value['value']) && $options_value['value'] == $value['default']) {
+                                            $options_out = $options_value['title'] ?? '';
+                                            break;
+
+                                        } elseif (isset($options_value[$value['default']])) {
                                             $options_out = $options_value[$value['default']];
                                             break;
                                         }
@@ -1341,7 +1541,7 @@ class editTable extends initEdit {
                             } else {
                                 $this->scripts['select2'] = true;
 
-                                $tpl = new Templater3(\Core2\Theme::get("html-edit-select2"));
+                                $tpl = new Templater3(Theme::get("html-edit-select2"));
                                 $tpl->assign('[FIELD_ID]',   $fieldId);
                                 $tpl->assign('[FIELD]',      $field);
                                 $tpl->assign('[ATTRIBUTES]', $attrs);
@@ -1360,10 +1560,21 @@ class editTable extends initEdit {
                             if (is_array($this->selectSQL[$select])) {
                                 foreach ($this->selectSQL[$select] as $k => $v) {
                                     if (is_array($v)) {
-                                        $options_group = array_values($v);
+                                        if ( ! empty($v['title'])) {
+                                            $options[$k] = $v;
+                                        } else {
+                                            $options_group = array_values($v);
 
-                                        if (isset($options_group[2])) {
-                                            $options[$options_group[2]][$options_group[0]] = $options_group[1];
+                                            if (isset($options_group[2]) && is_scalar($options_group[2])) {
+                                                $options[$options_group[2]][$options_group[0]] = $options_group[1];
+                                            } else {
+                                                foreach ($v as $item) {
+                                                    if ( ! empty($item['title'])) {
+                                                        $options[$k] = $v;
+                                                        break;
+                                                    }
+                                                }
+                                            }
                                         }
                                     } else {
                                         $options[$k] = $v;
@@ -1376,12 +1587,18 @@ class editTable extends initEdit {
                                 $value['default'] = explode(",", $value['default']);
                             }
 
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $options_out = [];
                                 foreach ($options as $options_key => $options_value) {
                                     if (is_array($options_value)) {
                                         foreach ($options_value as $options_value_id => $options_value_title) {
-                                            if (in_array($options_value_id, $value['default'])) {
+
+                                            if ( ! empty($options_value_title['value']) &&
+                                                 in_array($options_value_title['value'], $value['default'])
+                                            ) {
+                                                $options_out[] = $options_value_title['title'] ?? '';
+
+                                            } elseif (in_array($options_value_id, $value['default'])) {
                                                 $options_out[] = $options_value_title;
                                             }
                                         }
@@ -1396,7 +1613,7 @@ class editTable extends initEdit {
                             } else {
                                 $this->scripts['select2'] = true;
 
-                                $tpl = new Templater3(\Core2\Theme::get("html-edit-multiselect2"));
+                                $tpl = new Templater3(Theme::get("html-edit-multiselect2"));
                                 $tpl->assign('[FIELD_ID]',   $fieldId);
                                 $tpl->assign('[FIELD]',      $field);
                                 $tpl->assign('[ATTRIBUTES]', $attrs);
@@ -1423,6 +1640,7 @@ class editTable extends initEdit {
 
                             if ( ! is_array($value['default'])) {
                                 $value['default'] = $value['default'] ? explode(",", $value['default']) : [];
+                                $value['default'] = array_combine(array_values($value['default']), array_values($value['default']));
                             }
 
                             $select_options = [];
@@ -1434,18 +1652,18 @@ class editTable extends initEdit {
                                     if (is_array($v)) {
                                         $options_group = array_values($v);
 
-                                        if (isset($options_group[2])) {
-                                            $select_options[$options_group[2]][$options_group[0]] = $options_group[1];
+                                        if (isset($options_group[2]) && is_scalar($options_group[2])) {
+                                            $select_options[$options_group[2]][$options_group[1]] = $options_group[1];
 
-                                            if (isset($row_tags[$options_group[0]])) {
-                                                unset($row_tags[$options_group[0]]);
+                                            if (isset($row_tags[$options_group[1]])) {
+                                                unset($row_tags[$options_group[1]]);
                                             }
                                         }
                                     } else {
-                                        $select_options[$k] = $v;
+                                        $select_options[$v] = $v;
 
-                                        if (isset($row_tags[$k])) {
-                                            unset($row_tags[$k]);
+                                        if (isset($row_tags[$v])) {
+                                            unset($row_tags[$v]);
                                         }
                                     }
                                 }
@@ -1462,13 +1680,13 @@ class editTable extends initEdit {
 
 
 
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $controlGroups[$cellId]['html'][$key] .= implode(', ', $value['default']);
 
                             } else {
                                 $this->scripts['tags'] = true;
 
-                                $tpl = new Templater3(\Core2\Theme::get("html-edit-tags"));
+                                $tpl = new Templater3(Theme::get("html-edit-tags"));
                                 $tpl->assign('[FIELD_ID]',     $fieldId);
                                 $tpl->assign('[FIELD]',        $field);
                                 $tpl->assign('[ATTRIBUTES]',   $options['attr']);
@@ -1501,7 +1719,7 @@ class editTable extends initEdit {
                                 $value['default'] = explode(",", $value['default']);
                             }
 
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $options_out = [];
                                 foreach ($options as $options_key => $options_value) {
                                     if (is_array($options_value)) {
@@ -1521,8 +1739,8 @@ class editTable extends initEdit {
                             } else {
                                 $this->scripts['multiselect2'] = true;
 
-                                $tpl = new Templater3(\Core2\Theme::get("html-edit-multilist2"));
-                                $tpl->assign('[THEME_PATH]', 'core2/html/' . THEME);
+                                $tpl = new Templater3(Theme::get("html-edit-multilist2"));
+                                $tpl->assign('[THEME_PATH]', self::THEME_HTML);
                                 $tpl->assign('[FIELD_ID]',   $fieldId);
                                 $tpl->assign('[FIELD]',      $field);
                                 $tpl->assign('[ATTRIBUTES]', str_replace(['"', "'"], ['!::', '!:'], $attrs));
@@ -1567,7 +1785,7 @@ class editTable extends initEdit {
                                 $value['default'] = explode(",", $value['default']);
                             }
 
-                            if ($this->readOnly) {
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 $options_out = [];
                                 foreach ($items as $options_key => $options_value) {
                                     if (is_array($options_value)) {
@@ -1585,8 +1803,8 @@ class editTable extends initEdit {
                                 $controlGroups[$cellId]['html'][$key] .= implode('<br>', $options_out);
 
                             } else {
-                                $tpl = new Templater3(\Core2\Theme::get("html-edit-multilist3"));
-                                $tpl->assign('[THEME_PATH]', 'core2/html/' . THEME);
+                                $tpl = new Templater3(Theme::get("html-edit-multilist3"));
+                                $tpl->assign('[THEME_PATH]', self::THEME_HTML);
                                 $tpl->assign('[FIELD_ID]',   $fieldId);
                                 $tpl->assign('[FIELD]',      $field);
                                 $tpl->assign('[ATTRIBUTES]', str_replace(['"', "'"], ['!::', '!:'], $attrs));
@@ -1637,11 +1855,16 @@ class editTable extends initEdit {
                                 $datasets    = json_decode(preg_replace('/[\x00-\x1F\x80-\xFF]/u', '', $json_string), true);
                             }
 
-                            if ($this->readOnly) {
+                            $is_delete   = ! isset($value['in']['is_delete']) || (bool)$value['in']['is_delete'];
+                            $is_add      = ! isset($value['in']['is_add']) || (bool)$value['in']['is_add'];
+                            $item_fields = $value['in']['fields'] ?? $value['in'];
+
+
+                            if ($this->readOnly || in_array($field, $this->read_only_fields)) {
                                 if ( ! empty($datasets)) {
                                     $tpl = new Templater3($this->tpl_control['dataset']);
 
-                                    foreach ($value['in'] as $item_field) {
+                                    foreach ($item_fields as $item_field) {
                                         $tpl->title->assign('[TITLE]', $item_field['title']);
                                         $tpl->title->reassign();
                                     }
@@ -1649,7 +1872,7 @@ class editTable extends initEdit {
                                     $num = 1;
                                     foreach ($datasets as $dataset) {
 
-                                        foreach ($value['in'] as $item_field) {
+                                        foreach ($item_fields as $item_field) {
                                             $field_value = '';
 
                                             if ( ! empty($dataset) && isset($dataset[$item_field['code']])) {
@@ -1660,7 +1883,7 @@ class editTable extends initEdit {
 
                                             $type_name = $item_field['type'] ?? 'text';
 
-                                            if ( ! in_array($type_name, ['text', 'textarea', 'select', 'select2', 'date', 'datetime', 'number', 'switch', 'hidden'])) {
+                                            if ( ! in_array($type_name, ['text', 'textarea', 'select', 'select2', 'date', 'datetime', 'number', 'switch', 'hidden', 'text_readonly'])) {
                                                 $type_name = 'text';
                                             }
 
@@ -1697,27 +1920,33 @@ class editTable extends initEdit {
                                     $controlGroups[$cellId]['html'][$key] .= $tpl;
                                 }
 
-                            } else {
-                                foreach ($value['in'] as $key_column => $option) {
+                            }
+                            else {
+                                foreach ($item_fields as $key_column => $option) {
                                     if ( ! empty($option['options'])) {
                                         $options = [];
                                         foreach ($option['options'] as $key_val => $item) {
                                             $options[] = ['val' => $key_val, 'title' => $item];
                                         }
-                                        $value['in'][$key_column]['options'] = $options;
+                                        $item_fields[$key_column]['options'] = $options;
                                     }
                                 }
 
-                                $tpl = new Templater3(\Core2\Theme::get("html-edit-dataset"));
-                                $tpl->assign('[THEME_PATH]', 'core2/html/' . THEME);
+                                $tpl = new Templater3(Theme::get("html-edit-dataset"));
+                                $tpl->assign('[THEME_PATH]', self::THEME_HTML);
                                 $tpl->assign('[FIELD_ID]',   $fieldId);
                                 $tpl->assign('[FIELD]',      $field);
-                                $tpl->assign('[OPTIONS]',    addslashes(json_encode($value['in'])));
+                                $tpl->assign('[OPTIONS]',    addslashes(json_encode($item_fields)));
 
-                                $tpl->touchBlock('delete_col');
-                                $tpl->touchBlock('edit_controls');
+                                if ($is_delete) {
+                                    $tpl->touchBlock('delete_col');
+                                }
 
-                                foreach ($value['in'] as $item_field) {
+                                if ($is_add) {
+                                    $tpl->touchBlock('edit_controls');
+                                }
+
+                                foreach ($item_fields as $item_field) {
                                     if (empty($item_field['type']) || $item_field['type'] != 'hidden') {
                                         $tpl->title->assign('[TITLE]', $item_field['title'] ?? '');
                                         $tpl->title->reassign();
@@ -1729,7 +1958,7 @@ class editTable extends initEdit {
                                     $num = 1;
                                     foreach ($datasets as $dataset) {
 
-                                        foreach ($value['in'] as $item_field) {
+                                        foreach ($item_fields as $item_field) {
                                             $field_value = '';
 
                                             if ( ! empty($dataset) && isset($dataset[$item_field['code']])) {
@@ -1745,7 +1974,7 @@ class editTable extends initEdit {
 
                                             $type_name = $item_field['type'] ?? 'text';
 
-                                            if ( ! in_array($type_name, ['text', 'textarea', 'select','select2', 'date', 'datetime', 'number', 'switch', 'hidden'])) {
+                                            if ( ! in_array($type_name, ['text', 'textarea', 'select','select2', 'date', 'datetime', 'number', 'switch', 'hidden', 'text_readonly'])) {
                                                 $type_name = 'text';
                                             }
 
@@ -1771,7 +2000,10 @@ class editTable extends initEdit {
                                             $tpl->item->field->reassign();
                                         }
 
-                                        $tpl->item->touchBlock('delete');
+                                        if ($is_delete) {
+                                            $tpl->item->touchBlock('delete');
+                                        }
+
                                         $tpl->item->assign('[ID]', $fieldId . '-' . $num);
                                         $tpl->item->reassign();
                                         $num++;
@@ -1779,7 +2011,7 @@ class editTable extends initEdit {
 
                                 }
                                 else {
-                                    foreach ($value['in'] as $item_field) {
+                                    foreach ($item_fields as $item_field) {
                                         $field_attributes  = ! empty($item_field['attributes'])
                                             ? $item_field['attributes']
                                             : '';
@@ -1815,7 +2047,9 @@ class editTable extends initEdit {
                                         $tpl->item->field->reassign();
                                     }
 
-                                    $tpl->item->touchBlock('delete');
+                                    if ($is_delete) {
+                                        $tpl->item->touchBlock('delete');
+                                    }
                                     $tpl->item->assign('[ID]', $fieldId . '-1');
                                 }
 
@@ -1823,9 +2057,9 @@ class editTable extends initEdit {
                             }
 
                         }
-						elseif ($value['type'] == 'xfile' || $value['type'] == 'xfiles') {
+						elseif ($value['type'] == self::TYPE_XFILE || $value['type'] == self::TYPE_XFILES) {
 							[$module, $action] = Registry::get('context');
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$files = $this->db->fetchAll("
                                     SELECT id, 
                                            filename,
@@ -1854,8 +2088,9 @@ class editTable extends initEdit {
 								} else {
 									$controlGroups[$cellId]['html'][$key] .= '<i>нет прикрепленных файлов</i>';
 								}
-							} else {
-                                $this->scripts['upload'] = 'xfile';
+							}
+                            else {
+                                $this->scripts['upload'] = "xfile";
                                 $this->HTML = str_replace('[_ACTION_]', 'index.php?module=admin&loc=core&action=upload', $this->HTML);
 								$params = explode("_", $value['type']);
 								$ft = '';
@@ -1896,7 +2131,7 @@ class editTable extends initEdit {
                                 $max_filesize_human = Tool::formatSizeHuman($options['maxFileSize']);
 
 								$un = $fieldId;
-                                $tpl = new \Templater3($this->tpl_control['xfile']);
+                                $tpl = new \Templater3($this->tpl_control['files']);
                                 if ($xfile == 'xfiles') {
                                     $tpl->touchBlock('xfiles');
                                     $tpl->assign("{S}", "ы");
@@ -2059,7 +2294,7 @@ $controlGroups[$cellId]['html'][$key] .= "
 							}
 						}
 						elseif ($value['type'] == 'modal') {
-							if ($this->readOnly) {
+							if ($this->readOnly || in_array($field, $this->read_only_fields)) {
 								$controlGroups[$cellId]['html'][$key] .= !empty($this->modal[$modal]['value']) ? $this->modal[$modal]['value'] : '';
 							} else {
                                 $this->scripts['modal'] = 'simplemodal';
@@ -2116,7 +2351,7 @@ $controlGroups[$cellId]['html'][$key] .= "
 						}
 
 						if (!empty($value['out'])) {
-							$controlGroups[$cellId]['html'][$key] .= $value['out'];
+							$controlGroups[$cellId]['html'][$key] .= str_replace("[VAL]", $value['default'], $value['out']);
 						}
 						$controlGroups[$cellId]['html'][$key] .= '</td></tr></table>';
 					}
@@ -2131,25 +2366,25 @@ $controlGroups[$cellId]['html'][$key] .= "
                     Tool::printJs("core2/js/control_datetimepicker.js", true);
                 }
                 if (isset($this->scripts['color'])) {
-                    Tool::printCss("core2/html/" . THEME . "/css/bootstrap-colorpicker.min.css");
-                    Tool::printJs("core2/html/" . THEME . "/js/bootstrap-colorpicker.min.js", true);
+                    Tool::printCss(self::THEME_HTML . "/css/bootstrap-colorpicker.min.css");
+                    Tool::printJs(self::THEME_HTML . "/js/bootstrap-colorpicker.min.js", true);
                 }
                 if (isset($this->scripts['multiselect2']) ||
                     isset($this->scripts['select2']) ||
                     isset($this->scripts['tags'])
                 ) {
-                    Tool::printCss("core2/html/" . THEME . "/css/select2.min.css");
-                    Tool::printCss("core2/html/" . THEME . "/css/select2.bootstrap.css");
-                    Tool::printJs("core2/html/" . THEME . "/js/select2.min.js", true);
-                    Tool::printJs("core2/html/" . THEME . "/js/select2.ru.min.js", true);
+                    Tool::printCss(self::THEME_HTML . "/css/select2.min.css");
+                    Tool::printCss(self::THEME_HTML . "/css/select2.bootstrap.css");
+                    Tool::printJs(self::THEME_HTML . "/js/select2.min.js", true);
+                    Tool::printJs(self::THEME_HTML . "/js/select2.ru.min.js", true);
                 }
                 if (isset($this->scripts['modal2'])) {
                     Tool::printJs("core2/js/bootstrap.modal.min.js", true);
-                    Tool::printCss("core2/html/" . THEME . "/css/bootstrap.modal.min.css");
+                    Tool::printCss(self::THEME_HTML . "/css/bootstrap.modal.min.css");
                 }
                 if (isset($this->scripts['upload'])) {
-                    Tool::printCss("core2/html/" . THEME . "/fileupload/jquery.fileupload.css");
-                    Tool::printCss("core2/html/" . THEME . "/fileupload/jquery.fileupload-ui.css");
+                    Tool::printCss(self::THEME_HTML . "/fileupload/jquery.fileupload.css");
+                    Tool::printCss(self::THEME_HTML . "/fileupload/jquery.fileupload-ui.css");
                     Tool::printJs("core2/js/tmpl.min.js", true);
                     Tool::printJs("core2/js/load-image.min.js", true);
                     Tool::printJs("core2/vendor/belhard/jquery-file-upload/js/jquery.fileupload.js", true);
@@ -2220,11 +2455,12 @@ $controlGroups[$cellId]['html'][$key] .= "
 
 		if (!$this->readOnly) {
 
-            $this->sess_form = new SessionContainer('Form');
+            $sess_form = new SessionContainer('Form');
             //$this->uniq_class_id .= "|$refid";
-            $already_opened = $this->sess_form->{$this->uniq_class_id};
+            $already_opened = $sess_form->{$this->uniq_class_id};
             //CUSTOM session fields
             if (!$refid) $refid = 0;
+            $refid .= "_" . crc32($_SERVER['REQUEST_URI']);
             $sess_data = isset($already_opened[$refid]) ? $already_opened[$refid] : [];
             if ($this->sess_form_custom) {
                 foreach ($this->sess_form_custom as $key => $item) {
@@ -2234,7 +2470,9 @@ $controlGroups[$cellId]['html'][$key] .= "
             }
             $already_opened[$refid] = $sess_data;
             //есль ли у юзера еще одна открытая эта же форма, то в сессии ничего не изменится
-            $this->sess_form->{$this->uniq_class_id} = $already_opened;
+            if ($already_opened) {
+                $sess_form->{$this->uniq_class_id} = $already_opened;
+            }
 
             $this->HTML .= $this->button($this->classText['SAVE'], "submit", "this.form.onsubmit();return false;", "button save");
 		}
@@ -2245,10 +2483,13 @@ $controlGroups[$cellId]['html'][$key] .= "
 		$this->HTML .= 	"</br>";
 	}
 
-	/**
-	 * @param $func
-	 */
-	public function save($func, $action = '') {
+
+    /**
+     * @param $func
+     * @param $action
+     * @return $this
+     */
+	public function save($func, $action = ''): self {
         $this->action = $action;
 		$this->isSaved = true;
 		// for javascript functions
@@ -2257,34 +2498,102 @@ $controlGroups[$cellId]['html'][$key] .= "
 		} else {
 			$this->addParams('file', $func);
 		}
+
+        return $this;
+	}
+
+
+    /**
+     * Установка метода для обработки сохранения
+     * @param string $handler
+     * @return editTable
+     */
+	public function setSaveHandler(string $handler): self {
+
+        $this->save("xajax_{$handler}(xajax.getFormValues(this.id))");
+
+        return $this;
 	}
 
 
     /**
      * Установка js кода которых будет выполнен при успешном сохранении
      * @param string $func
-     * @return void
+     * @return editTable
+     * @deprecated использовать addSuccessScript
      */
-	public function saveSuccess(string $func): void {
+	public function saveSuccess(string $func): self {
 
-        $this->setSessFormField('save_success', $func);
+        $this->addSuccessScript($func);
+
+        return $this;
 	}
 
 
-	/**
-	 * @param $va
-	 * @param string $value
-	 */
-	function addParams($va, $value = '') {
-		$this->params[$this->main_table_id][] = array('va' => $va, 'value' => $value);
+    /**
+     * Установка js кода которых будет выполнен при успешном сохранении
+     * @param string $script
+     * @return editTable
+     */
+	public function addSuccessScript(string $script): self {
+
+        $func = $this->sess_form_custom['save_success'] ?? '';
+
+        $this->setSessFormField('save_success', "{$func};{$script}");
+
+        return $this;
 	}
 
-	/**
+
+    /**
+     * Установка сообщения об успешном выполнении
+     * @param string|null $text
+     * @return editTable
+     */
+	public function addSuccessNotice(string $text = null): self {
+
+        $text = $text ?: $this->_('Сохранено');
+        $func = $this->sess_form_custom['save_success'] ?? '';
+
+        $this->setSessFormField('save_success', "{$func};CoreUI.notice.create('{$text}')");
+
+        return $this;
+	}
+
+
+    /**
+     * Установка адреса для перехода при успешном сохранении
+     * @param string $url
+     * @return editTable
+     */
+	public function setSuccessUrl(string $url): self {
+
+        $func = $this->sess_form_custom['save_success'] ?? '';
+
+        $this->setSessFormField('save_success', "{$func};load('{$url}')");
+
+        return $this;
+	}
+
+
+    /**
+     * @param $va
+     * @param $value
+     * @return $this
+     */
+	public function addParams($va, $value = ''): self {
+        $this->params[$this->main_table_id][] = ['va' => $va, 'value' => $value];
+        return $this;
+    }
+
+
+    /**
 	 *
 	 */
 	private function noAccess() {
 		echo $this->classText['noReadAccess'];
 	}
+
 
 	/**
 	 * Сохраняет в сессии данные служебных полей формы
@@ -2377,7 +2686,6 @@ $controlGroups[$cellId]['html'][$key] .= "
             );
         }
     }
-
 }
 
 
@@ -2386,11 +2694,11 @@ $controlGroups[$cellId]['html'][$key] .= "
 
 
 class cell {
-	protected $controls			= array();
-	protected $gr				= array();
-	protected $main_table_id;
-		
-	public function __construct($main_table_id) {
+    protected $controls      = [];
+    protected $gr            = [];
+    protected $main_table_id;
+
+    public function __construct($main_table_id) {
 		$this->main_table_id 	= $main_table_id;
 		
 	}
@@ -2405,15 +2713,15 @@ class cell {
 	 */
 	public function addControl($name, $type, $in = "", $out = "", $default = "", $req = false) {
 		global $counter;
-		$temp = array(
-			'name' 		=> $name, 
-			'type' 		=> strtolower($type), 
-			'in' 		=> $in, 
-			'out' 		=> $out, 
-			'default' 	=> $default, 
-			'req' 		=> $req
-		);
-		$this->controls[$this->main_table_id][$counter] = $temp;
+        $temp = [
+            'name'    => $name,
+            'type'    => strtolower($type),
+            'in'      => $in,
+            'out'     => $out,
+            'default' => $default,
+            'req'     => $req,
+        ];
+        $this->controls[$this->main_table_id][$counter] = $temp;
 		
 		if (!empty($this->gr[$counter])) {
 			$this->controls[$this->main_table_id][$counter]['group'] = $this->gr[$counter];

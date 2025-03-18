@@ -13,23 +13,30 @@ class Panel {
     const POSITION_RIGHT  = 3;
     const POSITION_BOTTOM = 4;
 
+    const SIDE_LEFT  = 'left';
+    const SIDE_RIGHT = 'right';
+
     const TYPE_TABS  = 10;
     const TYPE_PILLS = 20;
     const TYPE_STEPS = 30;
 
-    protected $active_tab  = '';
-    protected $title       = '';
-    protected $tabs_width  = 0;
-    protected $description = '';
-    protected $content     = '';
-    protected $resource    = '';
-    protected $tabs        = [];
-    protected $back_url    = '';
-    protected $is_ajax     = false;
+    const WRAPPER_TYPE_CARD = 'card';
+    const WRAPPER_TYPE_NONE = 'none';
+
+    protected $active_tab     = '';
+    protected $title          = '';
+    protected $tabs_width     = 0;
+    protected $description    = '';
+    protected $content        = '';
+    protected $resource       = '';
+    protected $tabs           = [];
+    protected $back_url       = '';
+    protected $is_ajax        = false;
     protected $is_collapsible = false;
-    protected $position    = self::POSITION_TOP;
-    protected $type        = self::TYPE_TABS;
-    protected $controls    = [];
+    protected $position       = self::POSITION_TOP;
+    protected $type           = self::TYPE_TABS;
+    protected $controls       = [];
+    protected $wrapper_type   = self::WRAPPER_TYPE_CARD;
 
 
     /**
@@ -214,6 +221,28 @@ class Panel {
 
 
     /**
+     * Установка правила для отображения обертки в панели
+     * @param string $type
+     * @return Panel
+     */
+    public function setWrapperType(string $type): self {
+
+        $this->wrapper_type = $type;
+        return $this;
+    }
+
+
+    /**
+     * Получение правила для отображения обертки в панели
+     * @return string
+     */
+    public function getWrapperType(): string {
+
+        return $this->wrapper_type;
+    }
+
+
+    /**
      * Установка активного таба по умолчанию
      * @param string $tab_id
      */
@@ -256,19 +285,6 @@ class Panel {
             $tpl->content_top->assign('[CONTENT]', $this->content);
 
         } else {
-            $styles = "";
-
-            if ($this->tabs_width) {
-                $margin_width = $this->tabs_width - 1;
-
-                switch ($this->position) {
-                    case self::POSITION_LEFT:  $styles = "style=\"margin-left:{$margin_width}px\""; break;
-                    case self::POSITION_RIGHT: $styles = "style=\"margin-right:{$margin_width}px\""; break;
-                    default: $styles = "";
-                }
-            }
-
-            $tpl->content_bottom->assign('[STYLES]',  $styles);
             $tpl->content_bottom->assign('[CONTENT]', $this->content);
         }
 
@@ -308,15 +324,22 @@ class Panel {
         }
         $tpl->assign('[POSITION]', $position_name);
 
+        switch ($this->wrapper_type) {
+            case self::WRAPPER_TYPE_CARD : $wrapper_type = 'default'; break;
+            case self::WRAPPER_TYPE_NONE : $wrapper_type = 'none'; break;
+            default : throw new Exception('Invalid position'); break;
+        }
+        $tpl->assign('[WRAPPER_TYPE]', $wrapper_type);
+
         if ( ! empty($this->tabs)) {
-            $tpl->tabs->assign('[STYLES]', $this->tabs_width ? "style=\"width:{$this->tabs_width}px\"" : '');
+            $tpl->tabs->assign('[STYLES]', $this->tabs_width ? "style=\"min-width:{$this->tabs_width}px;width:{$this->tabs_width}px\"" : '');
 
             $tabs_load_count = [];
+            $tabs_side       = false;
 
             foreach ($this->tabs as $tab) {
 
                 if ($tab['type'] == 'tab') {
-
                     $tab_count = null;
 
                     if (isset($tab['options']['count'])) {
@@ -329,13 +352,25 @@ class Panel {
                         ];
                     }
 
+                    $class = [];
+
+                    if ( ! empty($tab['options']['side']) && is_string($tab['options']['side']) && ! $tabs_side) {
+                        $tabs_side = true;
+                        $class[]   = "panel-tab-side-{$tab['options']['side']}";
+                    }
+
                     if (isset($tab['options']['disabled']) && $tab['options']['disabled']) {
                         $tpl->tabs->elements->tab_disabled->assign('[ID]',    $tab['id']);
                         $tpl->tabs->elements->tab_disabled->assign('[TITLE]', $tab['title']);
+                        $tpl->tabs->elements->tab_disabled->assign('[CLASS]', implode(' ', $class));
 
                     } else {
-                        $url   = (strpos($tab['url'], "#") !== false ? $tab['url'] . "&" : $tab['url'] . "#") . "{$this->resource}={$tab['id']}";
-                        $class = $this->active_tab == $tab['id'] ? 'active' : '';
+                        $url = (strpos($tab['url'], "#") !== false ? $tab['url'] . "&" : $tab['url'] . "#") . "{$this->resource}={$tab['id']}";
+
+                        if ($this->active_tab == $tab['id']) {
+                            $class[] = 'active';
+                        }
+
 
                         if (isset($tab['options']['onclick']) && $tab['options']['onclick']) {
                             $onclick = $tab['options']['onclick'];
@@ -351,7 +386,7 @@ class Panel {
                         $title = $tab_count !== null ? "{$tab['title']} ({$tab_count})" : $tab['title'];
 
                         $tpl->tabs->elements->tab->assign('[ID]',      $tab['id']);
-                        $tpl->tabs->elements->tab->assign('[CLASS]',   $class);
+                        $tpl->tabs->elements->tab->assign('[CLASS]',   implode(' ', $class));
                         $tpl->tabs->elements->tab->assign('[TITLE]',   $title);
                         $tpl->tabs->elements->tab->assign('[ONCLICK]', $onclick);
                         $tpl->tabs->elements->tab->assign('[URL]',     $url);

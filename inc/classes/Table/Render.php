@@ -16,7 +16,7 @@ class Render extends Acl {
     /**
      * @var SessionContainer
      */
-    protected $session        = null;
+    private $session        = null;
     protected $theme_src      = '';
     protected $theme_location = '';
     protected $date_mask      = "d.m.Y";
@@ -35,6 +35,7 @@ class Render extends Acl {
 
     /**
      * @param array $table
+     * @throws \Zend_Exception
      */
     public function __construct(array $table) {
 
@@ -67,14 +68,20 @@ class Render extends Acl {
         }
 
         $show_scripts_daterangepicker = false;
+        $isset_sort_column            = false;
 
         $tpl = new \Templater3($this->theme_location . '/html/table.html');
         $tpl->assign('[THEME_SRC]',         $this->theme_src);
         $tpl->assign('[RESOURCE]',          $this->table['resource']);
+        $tpl->assign('[DELETE]',            $this->table['resource'] . "." . $this->table['deleteKey']);
         $tpl->assign('[IS_AJAX]',           (int)($this->table['isAjax'] ?? 0));
         $tpl->assign('[LOCATION]',          ! empty($this->table['isAjax']) ? $_SERVER['QUERY_STRING'] . "&__{$this->table['resource']}=ajax" : $_SERVER['QUERY_STRING']);
         $tpl->assign('[CLASS_MAX_HEIGHT]',  ! empty($this->table['max_height']) ? 'coreui-table-limit-height' : '');
         $tpl->assign('[STYLE_MAX_HEIGHT]',  ! empty($this->table['max_height']) ? "max-height: {$this->table['max_height']}px;" : '');
+
+        if ( ! empty($this->table['head_top'])) {
+            $tpl->touchBlock('script_head_top');
+        }
 
         if ( ! empty($this->table['show'])) {
             if ( ! empty($this->table['show']['toolbar'])) {
@@ -353,6 +360,7 @@ class Render extends Acl {
                     switch ($search['type']) {
                         case 'text' :
                         case 'text_strict' :
+                        case 'match':
                             $tpl->search_container->search_field->text->assign("[KEY]",     $key);
                             $tpl->search_container->search_field->text->assign("[VALUE]",   $control_value);
                             $tpl->search_container->search_field->text->assign("[IN_TEXT]", $attributes_str);
@@ -514,6 +522,7 @@ class Render extends Acl {
                     switch ($filter['type']) {
                         case 'text' :
                         case 'text_strict' :
+                        case 'match':
                             $tpl->filter_controls->filter_control->text->assign("[KEY]",   $key);
                             $tpl->filter_controls->filter_control->text->assign("[VALUE]", $control_value);
                             $tpl->filter_controls->filter_control->text->assign("[TITLE]", $filter['title'] ?? '');
@@ -657,38 +666,41 @@ class Render extends Acl {
 
                                         case 'days':
                                             if ($period_count >= 0) {
-                                                $period_start = date('Y-m-d', strtotime("-{$period_count} days"));
-                                                $period_end   = date('Y-m-d');
-
-                                                $checked = $period_start == $date_start && $period_end == $date_end;
+                                                $period_start = date('Y-m-d');
+                                                $period_end   = date('Y-m-d', strtotime("{$period_count} days"));
 
                                             } else {
-                                                $checked = empty($date_start) && empty($date_end);
+                                                $period_start = date('Y-m-d', strtotime("{$period_count} days"));
+                                                $period_end   = date('Y-m-d');
                                             }
+
+                                            $checked = $period_start == $date_start && $period_end == $date_end;
                                             break;
 
                                         case 'month':
-                                            if ($period_count >= 0) {
-                                                $period_start = date('Y-m-01', strtotime("-{$period_count} month"));
-                                                $period_end   = date('Y-m-d');
-
-                                                $checked = $period_start == $date_start && $period_end == $date_end;
+                                            if ($period_count > 0) {
+                                                $period_start = date('Y-m-d');
+                                                $period_end   = date('Y-m-t', strtotime("{$period_count} month"));
 
                                             } else {
-                                                $checked = empty($date_start) && empty($date_end);
+                                                $period_start = date('Y-m-01', strtotime("{$period_count} month"));
+                                                $period_end   = date('Y-m-d');
                                             }
+
+                                            $checked = $period_start == $date_start && $period_end == $date_end;
                                             break;
 
                                         case 'year':
-                                            if ($period_count >= 0) {
-                                                $period_start = date('Y-01-01', strtotime("-{$period_count} year"));
-                                                $period_end   = date('Y-m-d');
-
-                                                $checked = $period_start == $date_start && $period_end == $date_end;
+                                            if ($period_count > 0) {
+                                                $period_start = date('Y-m-d');
+                                                $period_end   = date('Y-12-31', strtotime("{$period_count} year"));
 
                                             } else {
-                                                $checked = empty($date_start) && empty($date_end);
+                                                $period_start = date('Y-01-01', strtotime("{$period_count} year"));
+                                                $period_end   = date('Y-m-d');
                                             }
+
+                                            $checked = $period_start == $date_start && $period_end == $date_end;
                                             break;
                                     }
 
@@ -748,6 +760,10 @@ class Render extends Acl {
                         $column['attr']['style'] = ! empty($column['attr']['style'])
                             ? "text-align:right;{$column['attr']['style']}"
                             : "text-align:right;";
+                    }
+
+                    if ($column['type'] == 'sort') {
+                        $isset_sort_column = true;
                     }
 
 
@@ -840,7 +856,7 @@ class Render extends Acl {
                         $group_value = $row['cells'][$group_field]['value'];
                         $count_cols  = 1;
 
-                        $tpl->rows->assign('<tr', '<tr class="coreui-table-row-group"');
+                        $tpl->rows->assign('[ROW_ATTR]', 'class="coreui-table-row-group"');
 
                         if ( ! empty($this->table['show']) && ! empty($this->table['show']['selectRows'])) {
                             $tpl->rows->group->touchBlock('group_checkbox');
@@ -857,7 +873,6 @@ class Render extends Acl {
                         $tpl->rows->reassign();
                     }
 
-                    $tpl->rows->assign('<tr', '<tr');
                     $tpl->rows->row->assign('[ID]', $row_id);
 
                     if ( ! empty($this->table['show']) && ! empty($this->table['show']['lineNumbers'])) {
@@ -906,6 +921,7 @@ class Render extends Acl {
 
                             switch ($column['type']) {
                                 case 'text':
+                                case 'match':
                                     $tpl->rows->row->col->default->assign('[VALUE]', htmlspecialchars($value));
                                     break;
 
@@ -938,12 +954,18 @@ class Render extends Acl {
                                     break;
 
                                 case 'date':
-                                    $date = $value ? date($this->date_mask, strtotime($value)) : '';
+                                    $options = $column['options'] ?? [];
+                                    $format  = $options['format'] ?? $this->date_mask;
+
+                                    $date = $value ? date($format, strtotime($value)) : '';
                                     $tpl->rows->row->col->default->assign('[VALUE]', $date);
                                     break;
 
                                 case 'datetime':
-                                    $date = $value ? date($this->datetime_mask, strtotime($value)) : '';
+                                    $options = $column['options'] ?? [];
+                                    $format  = $options['format'] ?? $this->datetime_mask;
+
+                                    $date = $value ? date($format, strtotime($value)) : '';
                                     $tpl->rows->row->col->default->assign('[VALUE]', $date);
                                     break;
 
@@ -956,25 +978,34 @@ class Render extends Acl {
                                     $tpl->rows->row->col->default->assign('[VALUE]', $img);
                                     break;
 
+                                case 'sort':
+                                    $content = "<i class=\"table-row-sortable fa fa-bars\" data-id=\"{$row_id}\" style=\"cursor: ns-resize\"></i>";
+                                    $tpl->rows->row->col->default->assign('[VALUE]', $content);
+                                    break;
+
                                 case 'switch':
                                     $cell['attr']['onclick'] = "event.cancelBubble = true;";
 
-                                    $options    = $column['options'] ?? [];
-                                    $table_name = $this->table['tableName'] ?? '';
-                                    $color      = ! empty($options['color']) ? "color-{$options['color']}" : 'color-primary';
-                                    $value_y    = $options['value_Y'] ?? 'Y';
-                                    $value_n    = $options['value_N'] ?? 'N';
-                                    $table      = $options['table'] ?? $table_name;
+                                    $options          = $column['options'] ?? [];
+                                    $table_name       = $this->table['tableName'] ?? '';
+                                    $color            = ! empty($options['color']) ? "color-{$options['color']}" : 'color-primary';
+                                    $value_y          = $options['value_Y'] ?? 'Y';
+                                    $value_n          = $options['value_N'] ?? 'N';
+                                    $message_active   = $options['message_active'] ?? '';
+                                    $message_inactive = $options['message_inactive'] ?? '';
+                                    $table            = $options['table'] ?? $table_name;
 
                                     if ($this->checkAcl($this->table['resource'], 'edit_all')) {
-                                        $tpl->rows->row->col->switch->assign('[FIELD]',       $column['field']);
-                                        $tpl->rows->row->col->switch->assign('[TABLE_FIELD]', $table ? "{$table}.{$column['field']}" : $column['field']);
-                                        $tpl->rows->row->col->switch->assign('[NMBR]',        $row_number);
-                                        $tpl->rows->row->col->switch->assign('[CHECKED_Y]',   $value == $value_y ? 'checked="checked"' : '');
-                                        $tpl->rows->row->col->switch->assign('[CHECKED_N]',   $value == $value_n ? 'checked="checked"' : '');
-                                        $tpl->rows->row->col->switch->assign('[COLOR]',       $color);
-                                        $tpl->rows->row->col->switch->assign('[VALUE_Y]',     $value_y);
-                                        $tpl->rows->row->col->switch->assign('[VALUE_N]',     $value_n);
+                                        $tpl->rows->row->col->switch->assign('[FIELD]',            $column['field']);
+                                        $tpl->rows->row->col->switch->assign('[TABLE_FIELD]',      $table ? "{$table}.{$column['field']}" : $column['field']);
+                                        $tpl->rows->row->col->switch->assign('[NMBR]',             $row_number);
+                                        $tpl->rows->row->col->switch->assign('[CHECKED_Y]',        $value == $value_y ? 'checked="checked"' : '');
+                                        $tpl->rows->row->col->switch->assign('[CHECKED_N]',        $value == $value_n ? 'checked="checked"' : '');
+                                        $tpl->rows->row->col->switch->assign('[COLOR]',            $color);
+                                        $tpl->rows->row->col->switch->assign('[MESSAGE_ACTIVE]',   $message_active);
+                                        $tpl->rows->row->col->switch->assign('[MESSAGE_INACTIVE]', $message_inactive);
+                                        $tpl->rows->row->col->switch->assign('[VALUE_Y]',          $value_y);
+                                        $tpl->rows->row->col->switch->assign('[VALUE_N]',          $value_n);
                                     } else {
                                         $tpl->rows->row->col->default->assign('[VALUE]', $value == $value_y ? $this->_("Вкл.") : $this->_("Выкл."));
                                     }
@@ -1007,7 +1038,7 @@ class Render extends Acl {
                                 $attribs_string .= " {$name}=\"{$attr}\"";
                             }
                         }
-                        $tpl->rows->assign('<tr', '<tr ' . $attribs_string);
+                        $tpl->rows->assign('[ROW_ATTR]', $attribs_string);
                     }
 
                     if ( ! empty($this->table['show']) && ! empty($this->table['show']['selectRows'])) {
@@ -1028,6 +1059,10 @@ class Render extends Acl {
 
         if ($show_scripts_daterangepicker) {
             $tpl->touchBlock('script_daterangepicker');
+        }
+
+        if ($isset_sort_column) {
+            $tpl->touchBlock('sort_rows');
         }
 
         return $this->minify($tpl->render());

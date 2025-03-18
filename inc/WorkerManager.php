@@ -21,7 +21,7 @@ namespace Core2;
 
 require_once "classes/Registry.php";
 require_once "classes/Config.php";
-
+require_once "classes/Job.php";
 
 declare(ticks = 1);
 error_reporting(E_ALL | E_STRICT);
@@ -368,14 +368,10 @@ class WorkerManager {
         $this->config['file'] = __DIR__ . "/../conf.ini";
         if (isset($this->config['file'])) {
             if (file_exists($this->config['file'])) {
-                $core_config = $this->parse_config($this->config['file']);
-                Registry::set('core_config', (new Config($core_config))->getData());
-                if (isset($core_config['gearman'])) {
-                    $this->config = $core_config['gearman'];
-                    $this->config['functions'] = [];
-                    if (!empty($config['gearman']['functions'])) {
-                        $this->config['functions'] = $core_config['gearman']['functions'];
-                    };
+                $core_config = (new Config())->readIni($this->config['file'], 'production');
+                Registry::set('core_config', $core_config);
+                if (isset($core_config->gearman)) {
+                    $this->config = $core_config->gearman->toArray();
                 }
             }
             else {
@@ -394,9 +390,9 @@ class WorkerManager {
                 'adapter' => 'Pdo_Mysql',
                 'params'  => [
                     'charset' => 'utf8',
-                ],
-                'driver_options'=> [
-                    \PDO::ATTR_TIMEOUT => 3,
+                    'driver_options'=> [
+                        \PDO::ATTR_TIMEOUT => 3,
+                    ]
                 ],
                 'isDefaultTableAdapter'      => true,
                 'caseFolding'                => true,
@@ -414,18 +410,20 @@ class WorkerManager {
         }
 
         try {
-            $config2 = $this->parse_config($opts["c"], $section);
 
-            if (isset($config2['database']['params'])) {
-                $params = array_merge($config['database'], $config2['database']);
-                $config2['database'] = $params;
+            $conf     = new Config($config);
+            $config   = $conf->getData()->merge($conf->readIni($opts["c"], $section));
+
+            $tz = $config->system->timezone;
+            if (!empty($tz)) {
+                date_default_timezone_set($tz);
             }
-            Registry::set('config', (new Config($config2))->getData());
+            Registry::set('config', ($config));
         }
         catch (\Exception $e) {
             $this->show_help($e->getMessage());
         }
-
+        
         /**
          * command line opts always override config file
          */
@@ -630,144 +628,6 @@ class WorkerManager {
     }
 
 
-    /**
-     * Parses INI file adding extends functionality via ":base" postfix on namespace.
-     * @param string $file
-     * @param string $section
-     * @return array
-     * @throws \Exception
-     */
-    protected function parse_config(string $file, string $section = 'production'): array {
-
-        $this->toLog("Loading configuration from $file");
-        $config  = parse_ini_file($file, true);
-        $config  = $this->resolveNestedSections($config);
-
-        foreach ($config as $namespace => $properties) {
-            if (is_array($properties) && $namespace == $section) {
-                // overwrite / set current namespace values
-                foreach ($properties as $key => $val) {
-                    $config[$namespace] = $this->_processKey($config[$namespace], $key, $val);
-                    unset($config[$namespace][$key]);
-                }
-            }
-        }
-
-        if (empty($config)) {
-            $this->show_help("No configuration found in $file");
-        }
-
-        if ( ! isset($config[$section])) {
-            $this->show_help("No section $section found in $file");
-        }
-
-        return $config[$section];
-    }
-
-
-    /**
-     * Добавляет возможность наследования секций
-     * @param array       $config
-     * @param string|null $section
-     * @return array
-     */
-    private function resolveNestedSections(array $config, string $section = null): array {
-
-        foreach ($config as $namespace => $section_content) {
-            if ( ! str_contains($namespace, ':')) {
-                if ($section) {
-                    if ($namespace == $section) {
-                        $config[$namespace] = $section_content;
-                    }
-
-                } else {
-                    $config[$namespace] = $section_content;
-                }
-            }
-        }
-
-        foreach ($config as $namespace => $section_content) {
-            if (str_contains($namespace, ':')) {
-                @list($name, $extends) = explode(':', $namespace);
-                $name    = trim($name);
-                $extends = trim((string)$extends);
-
-
-                if ($extends) {
-                    if ($section) {
-                        if ($name == $section) {
-                            $config[$namespace] = $section_content;
-
-                            if (isset($config[$extends])) {
-                                $config[$name] = array_merge($config[$extends], $section_content);
-
-                            } else {
-                                $nested_section = $this->resolveNestedSections($config, $extends);
-                                $config[$name]  = $nested_section[$extends] ?? [];
-                            }
-                        }
-
-                    } else {
-                        if (isset($config[$extends])) {
-                            $config[$name] = array_merge($config[$extends], $section_content);
-
-                        } else {
-                            $nested_section = $this->resolveNestedSections($config, $extends);
-                            $config[$name]  = $nested_section[$extends] ?? [];
-                        }
-                    }
-
-                    unset($config[$namespace]);
-
-                } else {
-                    if ($section) {
-                        if ($namespace == $section) {
-                            $config[$namespace] = $section_content;
-                        }
-
-                    } else {
-                        $config[$name] = $section_content;
-                    }
-                }
-            }
-        }
-
-        return $config;
-    }
-
-
-    /**
-     * @param $config
-     * @param $key
-     * @param $value
-     * @return array
-     * @throws \Exception
-     */
-    protected function _processKey($config, $key, $value)
-    {
-        if (strpos($key, '.') !== false) {
-            $pieces = explode('.', $key, 2);
-            if (strlen($pieces[0]) && strlen($pieces[1])) {
-                if (!isset($config[$pieces[0]])) {
-                    if ($pieces[0] === '0' && !empty($config)) {
-                        // convert the current values in $config into an array
-                        $config = array($pieces[0] => $config);
-                    } else {
-                        $config[$pieces[0]] = array();
-                    }
-                } elseif (!is_array($config[$pieces[0]])) {
-                    throw new \Exception("Cannot create sub-key for '{$pieces[0]}' as key already exists");
-                }
-                $config[$pieces[0]] = $this->_processKey($config[$pieces[0]], $pieces[1], $value);
-            } else {
-                throw new \Exception("Invalid key '$key'");
-            }
-        } else {
-            $config[$key] = $value;
-        }
-        return $config;
-    }
-
 
     /**
      * Helper function to load and filter worker files
@@ -861,6 +721,8 @@ class WorkerManager {
                 }
             }
         }
+//        echo "<PRE>";print_r($this->config);echo "</PRE>";//die;
+//        echo "<PRE>";print_r($this->functions);echo "</PRE>";die;
     }
 
     /**
@@ -934,7 +796,7 @@ class WorkerManager {
                     $mtime = filemtime($func['path']);
                     $max_time = max($max_time, $mtime);
                     $this->toLog("{$func['path']} - $mtime $last_check_time", self::LOG_LEVEL_CRAZY);
-                    if ($last_check_time!=0 && $mtime > $last_check_time) {
+                    if ($last_check_time != 0 && $mtime > $last_check_time) {
                         $this->toLog("New code found. Sending SIGHUP", self::LOG_LEVEL_PROC_INFO);
                         posix_kill($this->parent_pid, SIGHUP);
                         break;
@@ -1074,7 +936,7 @@ class WorkerManager {
                     $this->toLog("Adjusted max run time to {$this->max_run_time} seconds", self::LOG_LEVEL_DEBUG);
                 }
 
-                $this->start_lib_worker($worker_list, $timeouts);
+                $this->start_lib_worker2($worker_list, $timeouts);
 
                 $this->toLog("Child exiting", self::LOG_LEVEL_WORKER_INFO);
 
@@ -1379,19 +1241,17 @@ class WorkerManager {
         $thisWorker->addOptions(GEARMAN_WORKER_NON_BLOCKING);
         $thisWorker->addOptions(GEARMAN_WORKER_GRAB_UNIQ);
 
-        $thisWorker->setTimeout(5000);
+        $connected = false;
 
         foreach ($this->servers as $s) {
-            $this->toLog("Adding server $s", self::LOG_LEVEL_WORKER_INFO);
-            // see: https://bugs.php.net/bug.php?id=63041
+            $this->toLog("Adding server $s", self::LOG_LEVEL_PROC_INFO);
             try {
                 $thisWorker->addServers($s);
             } catch (\GearmanException $e) {
-                if ($e->getMessage() !== 'Failed to set exception option') {
-                    throw $e;
-                }
+                //если сервер недоступен
             }
         }
+
         $dd = str_replace(DIRECTORY_SEPARATOR, "-", dirname(dirname(__DIR__)));
         $dd = trim($dd, '-');
         foreach ($worker_list as $w) {
@@ -1400,10 +1260,12 @@ class WorkerManager {
             $this->toLog("Adding job $w ; timeout: " . $timeout, self::LOG_LEVEL_WORKER_INFO);
             $thisWorker->addFunction($w, array($this, "do_job"), $this, $timeout);
         }
+        $thisWorker->setTimeout(5000); //столько воркер будет ждять задачу от сервера
 
         register_shutdown_function(array($this, 'fatal_handler'));
 
         $start = time();
+        $died = 0;
 
         while (!$this->stop_work) {
 
@@ -1414,11 +1276,18 @@ class WorkerManager {
                 if ($thisWorker->returnCode() == GEARMAN_SUCCESS) continue;
 
                 if (!@$thisWorker->wait()) {
+                    //воркер в состоянии ожидания задачи от job-сервера
                     if ($thisWorker->returnCode() == GEARMAN_NO_ACTIVE_FDS) {
+                        //после ожидания выяснилось, что сервер не отвечает
+                        //ждем еще 5 сек
+                        $this->toLog('Failed to connect to Gearman Gerver.'. PHP_EOL, self::LOG_LEVEL_WORKER_INFO);
+                        $died++;
                         sleep(5);
                     }
                 }
+
             }
+//            if ($thisWorker->returnCode() !== GEARMAN_TIMEOUT) echo $thisWorker->error().PHP_EOL;
 
             /**
              * Check the running time of the current child. If it has
@@ -1440,6 +1309,237 @@ class WorkerManager {
 
     }
 
+    private function start_lib_worker2($worker_list, $timeouts = array()) {
+//        ob_implicit_flush(true);
+        $worker = null;
+        foreach ($this->servers as $s) {
+            $this->toLog("Adding server $s", self::LOG_LEVEL_PROC_INFO);
+
+            $worker = stream_socket_client("tcp://$s", $errno, $errstr, 2);
+            if (!$worker) {
+                continue;
+            }
+            break;
+        }
+        if (!$worker) {
+            $this->toLog("Failed to connect to server $s", self::LOG_LEVEL_PROC_INFO);
+            die("Failed to connect to server: $errstr ($errno)\n");
+        }
+        //stream_set_read_buffer($worker, 0);
+        //stream_set_chunk_size($worker, 8192);
+        //stream_set_blocking($worker, true);
+
+        $dd = str_replace(DIRECTORY_SEPARATOR, "-", dirname(dirname(__DIR__)));
+        $dd = trim($dd, '-');
+
+        register_shutdown_function(array($this, 'fatal_handler'));
+
+        $objects = [];
+        foreach ($worker_list as $w) {
+            $timeout = (isset($timeouts[$w]) ? $timeouts[$w] : 0);
+            $w_full = $dd . "-" . $w;
+            echo "Adding job $w_full\n";
+            $this->toLog("Adding job $w_full ; timeout: " . $timeout, self::LOG_LEVEL_PROC_INFO);
+            require_once $this->functions[$w]['path'];
+            $func = "\\Core2\\" . $this->functions[$w]['name'];
+            $objects[$w_full] = new $func();
+
+            $request = "\0REQ" . // Магическое число (запрос)
+                pack('N', 1) . //CAN_DO
+                pack('N', strlen($w_full)) .
+                $w_full;
+            fwrite($worker, $request);
+
+        }
+
+
+        $start = time();
+        $tick = time();
+        $buffer = '';
+
+        while (!$this->stop_work) {
+
+            $request = "\0REQ" . // Магическое число (запрос)
+                //pack('N', 9) . //GRAB_JOB
+                pack('N', 30) . //GRAB_JOB_UNIQ
+                pack('N', 0);
+            if (fwrite($worker, $request) === false) {
+                $this->toLog("Server FAILED GRAB_JOB_UNIQ", self::LOG_LEVEL_PROC_INFO);
+                $this->stop_work = true;
+            }
+
+            // Читаем данные от сервера
+            $data = fread($worker, 20480);
+
+//            echo "Received data: " . bin2hex($data) . "\n"; // Вывод сырых данных для отладки
+
+            if (strpos($data, "\0RES") === 0) {
+                $array = unpack("Nmagic/Ntype/Nlength/Z*job", $data);
+                $type  = $array['type'];
+
+                if ($type !== 10) { //NO_JOB
+                    $job   = trim($array['job']);
+                    $length = strlen($job) + 12; //длина названия job + начальные 12 байт
+                    $array  = unpack("@$length/a*", $data);
+                    $body   = trim($array[1]);
+//                    echo "LENGTH: " . strlen($data) . "\n";
+//                    echo "JOB: $job\n";
+//                    echo "TYPE: $type\n";
+//                    echo "BODY: $body\n";
+
+                    if ($type === 6) { //NOOP
+                        echo "WAKEUP!\n";
+                    }
+                    elseif ($type === 11 || $type === 31 || $type === 40) { //JOB_ASSIGN JOB_ASSIGN_UNIQ JOB_ASSIGN_ALL
+                        // Парсим задачу
+                        foreach ($objects as $function => $runner) {
+                            if (strpos($body, $function) === 0) break;
+                            $function = '';
+                        }
+                        if (!empty($objects[$function])) { //узнали функцию
+                            $unique = '';
+                            $payload = trim(substr($body, strlen($function)));
+                            if (strpos($payload, "{") !== 0) {
+                                //значит есть уникальный id задачи
+                                $unique = substr($payload, 0, strpos($payload, "{"));
+                                $payload = substr($payload, strpos($payload, "{"));
+                            }
+                            if (!str_ends_with($payload, "}|")) {
+                                //забрали не все занные
+                                echo "EXTRA $job\n";
+                                $this->toLog("EXTRA data for job $job", self::LOG_LEVEL_WORKER_INFO);
+                                $request = "\0REQ" . // Магическое число (запрос)
+                                    //pack('N', 9) . //GRAB_JOB
+                                    pack('N', 30) . //GRAB_JOB_UNIQ
+                                    pack('N', 0);
+                                $send = fwrite($worker, $request);
+                                if (!$send) {
+                                    break;
+                                }
+                                // Читаем данные от сервера
+                                $data = fread($worker, 20480);
+                                if ($data === false) {
+                                    echo "Error reading from server\n";
+                                    break;
+                                }
+                                $payload .= $data;
+                            }
+
+                            $json = preg_replace('/[[:cntrl:]]/', '', substr($payload, 0, -1));
+                            $payload = json_decode($json);
+
+                            if (json_last_error() === JSON_ERROR_NONE) {
+                                // Выполняем задачу
+                                $result = "";
+                                $log = array();
+//                                $f = fopen("/home/easter/job.log", "a");
+//                                fwrite($f, $this->pid . " " . $job . "\n");
+
+                                try {
+                                    $result = $objects[$function]->run(new Job($job, $payload, $unique), $log);
+                                    foreach ($log as $item) {
+                                        $this->toLog("Function $function said: $item", self::LOG_LEVEL_WORKER_INFO);
+                                    }
+                                    $request = "\0REQ" . // Магическое число (запрос)
+                                        pack('N', 13) . //WORK_COMPLETE
+                                        pack('N', strlen($job) + strlen($result) + 1) .
+                                        $job . "\0" .
+                                        $result;
+                                    fwrite($worker, $request);
+
+                                    //echo "Worker completed job: $job with result: $result\n";
+
+                                } catch (\Exception $e) {
+                                    $msg = $e->getMessage();
+                                    $request = "\0REQ" . // Магическое число (запрос)
+                                        pack('N', 25) . //WORK_EXCEPTION
+                                        pack('N', strlen($job) + strlen($msg) + 1) .
+                                        $job . "\0" .
+                                        $msg;
+                                    fwrite($worker, $request);
+                                    //echo "Worker FAILED job: $job with exception: $msg \n\n";
+                                    $this->toLog("Worker FAILED job: $job with exception: $msg", self::LOG_LEVEL_WORKER_INFO);
+                                }
+
+                            }
+                            else {
+                                $msg = json_last_error_msg();
+                                $request = "\0REQ" . // Магическое число (запрос)
+                                    pack('N', 25) . //WORK_EXCEPTION
+                                    pack('N', strlen($job) + strlen($msg) + 1) .
+                                    $job . "\0" .
+                                    $msg;
+                                fwrite($worker, $request);
+                                echo "Worker FAILED job: $job with exception: $msg \n\n" . strlen($data) . "\n\n$function\n\n$json\n\n";
+                                $this->toLog("Worker FAILED job: $job with exception: $msg", self::LOG_LEVEL_WORKER_INFO);
+                            }
+                        }
+                        else {
+                            // не смогли распознать задачу (такого быть не может)
+                            $request = "\0REQ" . // Магическое число (запрос)
+                                pack('N', 14) . //WORK_FAIL
+                                pack('N', strlen($job)) .
+                                $job;
+                            fwrite($worker, $request);
+                            echo "Function FAILED: $body \n";
+                            $this->toLog("Function FAILED: $function", self::LOG_LEVEL_WORKER_INFO);
+                        }
+                    } else {
+                        //неизвестный код ответа
+                        $request = "\0REQ" . // Магическое число (запрос)
+                            pack('N', 14) . //WORK_FAIL
+                            pack('N', strlen($job)) .
+                            $job;
+                        fwrite($worker, $request);
+                        echo "Worker TYPE: $type FAILED job: $job \n";
+                        $this->toLog("Worker TYPE $type FAILED: $data", self::LOG_LEVEL_WORKER_INFO);
+                    }
+
+                } else {
+                    //if (time() - $tick > 10) {
+                    //    $tick = time();
+//                        $request = "\0REQ" . // Магическое число (запрос)
+//                            pack('N', 4) . //PRE_SLEEP
+//                            pack('N', 0);
+//                        fwrite($worker, $request);
+                        //echo "Worker TYPE: $type \n";
+                        //TODO подсчитывать время отсутствия задач и осводождать ресурсы при долгом простое
+                        usleep(5000);
+                    //}
+                }
+
+            }
+            else {
+                if ($data) {
+                    echo "Server FAILED job: $data \n";
+                    $this->toLog("Server FAILED job: $data", self::LOG_LEVEL_WORKER_INFO);
+                }
+            }
+
+            /**
+             * Check the running time of the current child. If it has
+             * been too long, stop working.
+             */
+            if ($this->max_run_time > 0 && time() - $start > $this->max_run_time) {
+                $this->toLog("Been running too long, exiting", self::LOG_LEVEL_WORKER_INFO);
+                $this->stop_work = true;
+            }
+
+            if (!empty($this->config["max_runs_per_worker"]) && $this->job_execution_count >= $this->config["max_runs_per_worker"]) {
+                $this->toLog("Ran $this->job_execution_count jobs which is over the maximum({$this->config['max_runs_per_worker']}), exiting", self::LOG_LEVEL_WORKER_INFO);
+                $this->stop_work = true;
+            }
+
+        }
+
+        if ($worker) {
+            $request = "\0REQ" . // Магическое число (запрос)
+                pack('N', 3) . //RESET_ABILITIES
+                pack('N', 0);
+            fwrite($worker, $request);
+        }
+    }
+
     /**
      * Wrapper function handler for all registered functions
      * This allows us to do some nice logging when jobs are started/finished
@@ -1453,6 +1553,7 @@ class WorkerManager {
 //        $w = $job->workload();
 
         $h = $job->handle();
+//        echo "<PRE>";print_r($job->returnCode());echo "</PRE>\n";//die;
 
 //        echo $h . chr(10);//die;
 //        echo $job->unique() .chr(10);//die;
@@ -1466,11 +1567,14 @@ class WorkerManager {
         } else {
             $func = $job_name;
         }
-        if (empty($objects[$job_name]) && !function_exists($func) && !class_exists("\Core2\\" . $func, false)) {
 
+        //имя воркера с учетом хоста
+        $job_name_log = $this->getRealJobName($job_name);
+
+        if (empty($objects[$job_name]) && !class_exists("\Core2\\" . $func, false)) {
+            //инициализация воркеров
             if (!isset($this->functions[$job_name])) {
                 $this->toLog("Function $func is not a registered job name");
-                return;
             }
 
             require_once $this->functions[$job_name]["path"];
@@ -1481,17 +1585,9 @@ class WorkerManager {
                 $ns_func = "\Core2\\$func";
                 $objects[$job_name] = new $ns_func();
 
-            } elseif (!function_exists($func)) {
-
-                $this->toLog("Function $func not found");
-                return;
             }
-
+            $this->toLog("($h) Starting Job!: $job_name_log", self::LOG_LEVEL_WORKER_INFO);
         }
-        $job_name_log = $this->getRealJobName($job_name);
-
-        $this->toLog("($h) Starting Job!: $job_name_log", self::LOG_LEVEL_WORKER_INFO);
-//        $this->toLog("($h) Workload: $w", self::LOG_LEVEL_DEBUG);
 
         $log = array();
 
@@ -1500,23 +1596,32 @@ class WorkerManager {
          */
         $result = null;
         if (isset($objects[$job_name])) {
+//            echo $job_name_log.PHP_EOL;
             $this->toLog("($h) Calling object for $job_name_log.", self::LOG_LEVEL_DEBUG);
             try {
-                $job->sendData('start');
+                $job->sendData($this->pid_file);
                 $result = $objects[$job_name]->run($job, $log);
-                $job->sendComplete('done');
-                $log[] = "Finish Job: $job_name_log";
+                if ($result && $job->handle()) {
+                    $job->sendComplete('done');
+                    $log[] = "Finish Job: $job_name_log";
+                }
+                else {
+                    $job->sendFail();
+//                    echo "!!!FAIL $job_name_log \n";
+                }
             } catch (\Exception $e) {
                 $this->toLog($e->getMessage(), self::LOG_LEVEL_WORKER_INFO);
                 $job->sendException($e->getMessage());
                 $job->sendFail();
             }
-        } elseif (function_exists($func)) {
-            $this->toLog("($h) Calling function for $job_name_log.", self::LOG_LEVEL_DEBUG);
-            $result = $func($job, $log);
-        } else {
-            $this->toLog("($h) FAILED to find a function or class for $job_name_log.", self::LOG_LEVEL_INFO);
         }
+        else {
+            $this->toLog("($h) FAILED to find a function or class for $job_name_log.", self::LOG_LEVEL_INFO);
+            $job->sendException("Object $job_name_log not found");
+            $job->sendFail();
+        }
+
+//        echo "<PRE>";print_r($job->returnCode());echo "</PRE>\n";//die;
 
         if (!empty($log)) {
             foreach ($log as $l) {
@@ -1571,13 +1676,16 @@ class WorkerManager {
 
         //$dd = str_replace(DIRECTORY_SEPARATOR, "-", dirname(dirname(__DIR__)));
         //$dd = trim($dd, '-');
-
         foreach ($this->functions as $func => $props) {
+            if (!file_exists($props["path"])) {
+                $this->toLog("File {$props["path"]} not found!");
+                posix_kill($this->pid, SIGUSR2);
+                exit();
+            }
             require_once $props["path"];
-            $real_func = $this->prefix.$func;
-            if (!function_exists($real_func) &&
-                (!class_exists("\Core2\\" . $real_func) || !method_exists("\Core2\\" . $real_func, "run"))) {
-                $this->toLog("Function $real_func not found in ".$props["path"]);
+            $real_func = $this->prefix . $func;
+            if (!class_exists("\\Core2\\" . $real_func) || !method_exists("\\Core2\\" . $real_func, "run")) {
+                $this->toLog("Class $real_func not found in " . $props["path"]);
                 posix_kill($this->pid, SIGUSR2);
                 exit();
             }
@@ -1605,9 +1713,9 @@ class WorkerManager {
             $errfile = $error["file"];
             $errline = $error["line"];
             $errstr  = $error["message"];
-            $trace   = print_r(debug_backtrace( false ), true);
+            $trace   = print_r(debug_backtrace(), true);
             if ($this->verbose == self::LOG_LEVEL_DEBUG) echo $errstr . chr(10);
-            $this->toLog($errstr . chr(10) . $trace, self::LOG_LEVEL_WORKER_INFO);
+            $this->toLog($errstr . chr(10) . $trace, self::LOG_LEVEL_PROC_INFO);
         }
     }
 }

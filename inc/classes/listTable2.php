@@ -966,7 +966,7 @@ class listTable2 extends initList {
 				} elseif ($value['type'] == 'status_inline') {
 					$evt = "";
 					if ($this->checkAcl($this->resource, 'edit_owner')) {
-						$evt = "onclick=\"listx.switch_active(this, event)\" t_name=\"{$value['in']}\" val=\"{$row[0]}\"";
+						$evt = "onclick=\"listx.switch_active(this, event)\" data-resource=\"{$this->resource}.{$value['in']}\" val=\"{$row[0]}\"";
 					}
 					if ($sql_value == 1 || $sql_value == 'Y' || $sql_value == '[ON]') {
 						$tableBodyHTML .= "<img src=\"core2/html/" . THEME . "/img/on.png\" alt=\"on\" $evt />";

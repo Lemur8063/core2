@@ -10,63 +10,96 @@ require_once __DIR__ . '/../inc/classes/Core_Db_Adapter_Pdo_Mysql.php';
 class Logger
 {
     private $_config;
+    private $_core_config;
     private $_writer;
+    private $_access_files = [];
+    private $_system_files = [];
 
     public function __construct()
     {
         $this->_config = Registry::get('config');
+        $this->_core_config = Registry::get('core_config');
 
-        if (isset($this->_config->log) &&
-            $this->_config->log &&
-            isset($this->_config->log->system->writer) &&
-            $this->_config->log->system->writer == 'file'
+        // Журнал работы системы
+        if (isset($this->_core_config->log->system->writer) &&
+            $this->_core_config->log->system->writer == 'file' &&
+            !empty($this->_core_config->log->system->file)
         ) {
-            if ( ! $this->_config->log->system->file) {
-                throw new \Exception('Не задан файл журнала запросов');
-            }
-            $this->_writer = 'file';
-
-        } else {
-            $this->_writer = 'db';
+            $this->_system_files[] = $this->_core_config->log->system->file;
         }
+        //журнал запросов
+        if (isset($this->_core_config->log->access->writer) &&
+            $this->_core_config->log->system->writer == 'file' &&
+            !empty($this->_core_config->log->access->file)
+        ) {
+            $this->_access_files[] = $this->_core_config->log->access->file;
+        }
+
+        // Журнал работы системы уровня conf.ini
+        // может использоваться для журнала конкретного хоста
+        if (isset($this->_config->log->system->writer) &&
+            $this->_config->log->system->writer == 'file' &&
+            !empty($this->_config->log->system->file)
+        ) {
+            if (!in_array($this->_config->log->system->file, $this->_system_files))
+                $this->_system_files[] = $this->_config->log->system->file;
+        }
+        //журнал запросов
+        if (isset($this->_config->log->access->writer) &&
+            $this->_config->log->system->writer == 'file' &&
+            !empty($this->_config->log->access->file)
+        ) {
+            if (!in_array($this->_config->log->system->file, $this->_access_files))
+                $this->_access_files[] = $this->_config->log->access->file;
+        }
+
     }
 
-    public function run($job, &$log) {
-
+    public function run(\GearmanJob|Job $job, &$log)
+    {
         $workload = json_decode($job->workload());
         if (\JSON_ERROR_NONE !== json_last_error()) {
             throw new \InvalidArgumentException(json_last_error_msg());
-            return;
         }
+        $workload_size = $job->workloadSize();
+        $job->sendStatus(1, $workload_size);
 
         $_SERVER = get_object_vars($workload->server);
 
-        $data = []; //данные для сохранения в базу
-        if ($this->_writer == 'file') {
-            $log[] = "Запись в файл " . $this->_config->log->system->file;
+        $data = get_object_vars($workload->payload); //данные для сохранения в базу
 
-            $corelog = new Log('access');
-            $corelog->access($workload->auth->NAME, $workload->payload->sid);
+        if (isset($data['sid'])) {
+            if ($this->_access_files) {
+                foreach ($this->_access_files as $access_file) {
+                    $corelog = new Log('logger');
+                    $corelog->file($access_file)->access($workload->auth->NAME, $workload->payload->sid);
+                    $log[] = "ACCESS LOG: " . $access_file;
+                }
 
-        } else {
-            $data = get_object_vars($workload->payload);
-            if ($data['action']) {
+            } else {
+                $data = get_object_vars($workload->payload);
+                if (empty($data['action'])) {
+                    throw new \Exception("No Logger action specified");
+                }
                 $data['action'] = serialize($data['action']);
-            }
-            //$log[] = "Соединяемся с базой...";
-            $mysql = (new Db())->db;
-            try {
-                $mysql->insert('core_log', $data);
 
-                //$log[] = "закрываем соединение...";
-                $mysql->closeConnection();
-            } catch (\Exception $e) {
-                // игнорируем исключение
-                $log[] = $e->getMessage();
-                $mysql->closeConnection();
-                throw new \Exception($e->getMessage(), $e->getCode());
+                //$log[] = "Соединяемся с базой...";
+                $mysql = (new Db())->db;
+                try {
+                    $mysql->insert('core_log', $data);
+
+                    //$log[] = "закрываем соединение...";
+                    $mysql->closeConnection();
+                } catch (\Exception $e) {
+                    // игнорируем исключение
+                    $log[] = $e->getMessage();
+                    $mysql->closeConnection();
+                    throw new \Exception($e->getMessage(), $e->getCode());
+                }
             }
+        } else {
+            //TODO лог системы
         }
-        return;
+        return true;
     }
 }

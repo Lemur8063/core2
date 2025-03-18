@@ -237,7 +237,6 @@ class MobileController extends Common {
 	public function action_users () {
         if (!$this->auth->ADMIN) throw new Exception(911);
         //require_once 'core2/mod/ModAjax.php';
-        $app = "index.php?module={$this->module}&action=users";
         $user = new View();
         $tab = new tabs('users');
         $title = $this->translate->tr("Справочник пользователей системы");
@@ -306,8 +305,6 @@ class MobileController extends Common {
 	 *
 	 */
 	public function action_welcome () {
-
-		$app = "index.php?module=core&action=welcome";
 
 		if (!empty($_POST['sendSupportForm'])) {
 			if (isset($_POST['supportFormModule'])) {

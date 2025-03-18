@@ -1,0 +1,10 @@
+parameters:
+	level: 6
+	phpVersion:
+		min: 80102 # PHP 8.1.2
+		max: 80104 # PHP 8.1.4
+	bootstrapFiles:
+		- inc/classes/Init.php
+	paths:
+		- inc
+		- mod/admin
