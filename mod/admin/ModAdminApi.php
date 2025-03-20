@@ -35,7 +35,6 @@ class ModAdminApi extends CommonApi
                 $submod = strtolower(current($params));
                 if ($submod) $resource .= "-$submod";
 
-
                 return $this->getAccessInfo($resource);
                 break;
             case 'POST':
@@ -382,6 +381,33 @@ class ModAdminApi extends CommonApi
     )]
     private function getAccessInfo(string $resource)
     {
+        $res = explode('-', $resource);
+        $mod = $this->getModule($res[0]);
+        if (!$mod) throw new \Exception('Error: resource not found', 404);
+        if (!empty($res[1]) && !isset($mod['submodules'][$res[1]])) throw new \Exception('Error: resource not found', 404);
+
+        if ($this->auth->ADMIN) {
+            $default = [
+                'access' => 'on',
+                'list_all' => 'on',
+                'read_all' => 'on',
+                'edit_all' => 'on',
+                'delete_all' => 'on'
+            ];
+
+            $access_add = $mod['access_add'] ? unserialize(base64_decode($mod['access_add'])) : [];
+            foreach ($access_add as $key => $item) {
+                $default[$key . "_all"] = 'on';
+            }
+            if (isset($res[1])) {
+                $access_add = $mod['submodules'][$res[1]]['access_add'] ? unserialize(base64_decode($mod['submodules'][$res[1]]['access_add'])) : [];
+                foreach ($access_add as $key => $item) {
+                    $default[$key . "_all"] = 'on';
+                }
+            }
+            return $default;
+        }
+
         $role = $this->db->fetchRow("
                     SELECT name, 
                            access
@@ -389,13 +415,18 @@ class ModAdminApi extends CommonApi
 					WHERE id=? AND is_active_sw = 'Y'
 					ORDER BY position DESC
                 ", $this->auth->ROLEID);
+
         if (!$role) throw new \Exception('Error: role not found', 404);
         $access = $role['access'] ? unserialize($role['access']) : [];
         $res = [];
         foreach ($access as $rule => $resources) {
-            if (!isset($resources[$resource])) continue;
+
+            if (!isset($resources[$resource])) {
+                continue;
+            }
             $res[$rule] = $resources[$resource];
         }
         return $res;
     }
+    
 }
