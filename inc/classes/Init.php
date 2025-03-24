@@ -418,6 +418,9 @@ class Init extends Db {
                 if ( ! empty($_POST['xjxr'])) {
                     throw new \Exception('expired');
                 }
+                if (empty($_SERVER['HTTP_REFERER'])) {
+                    throw new Exception('Referrer error');
+                }
                 $referer = parse_url($_SERVER['HTTP_REFERER']);
                 if ($referer['host'] !== $_SERVER['HTTP_HOST']) {
                     http_response_code(400);
