@@ -26,6 +26,7 @@ class Mailer
     public function run(\GearmanJob|Job $job, array &$log) {
 
         $workload = json_decode($job->workload());
+
         if (\JSON_ERROR_NONE !== json_last_error()) {
             throw new \InvalidArgumentException(json_last_error_msg());
         }
@@ -38,19 +39,9 @@ class Mailer
         $body   = $workload->payload->body;
         $bcc    = $workload->payload->bcc;
         $cc     = $workload->payload->cc;
-        $files  = unserialize($workload->payload->files);
+        $files  = $workload->payload->files; //StdObject
 
         $mail   = new PHPMailer();
-
-        if ($files) {
-            foreach ($files as $i => $file) {
-                $ext = PHPMailer::mb_pathinfo($file['name'], PATHINFO_EXTENSION);
-
-                $uploadfile = tempnam(sys_get_temp_dir(), hash('sha256', $file['name'])) . '.' . $ext;
-                file_put_contents($uploadfile, $file['content']);
-                $files[$i] = ['name' => $file['name'], 'file' => $uploadfile];
-            }
-        }
 
 
         // DEPRECATED
@@ -175,7 +166,7 @@ class Mailer
         if ( ! empty($files)) {
             foreach ($files as $file) {
 
-                $mail->addAttachment($file['file'], $file['name']);
+                $mail->addAttachment($file->file, $file->name);
             }
         }
 
