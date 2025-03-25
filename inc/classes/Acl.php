@@ -327,7 +327,7 @@ class Acl extends Db {
 	 * @param $type
 	 * @return bool
 	 */
-	public function checkAcl($source, $type = 'access') {
+	public function checkAcl($source, $type = 'access'): bool {
 
         $registry = Registry::getInstance();
 

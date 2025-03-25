@@ -176,7 +176,7 @@ require_once 'SSE.php';
 
 /**
  * Class Init
- * @property Modules $dataModules
+ * @property Core2\Model\Modules $dataModules
  */
 class Init extends Db {
 
@@ -499,9 +499,10 @@ class Init extends Db {
 
                 $mods = $this->getSubModule($module . '_' . $action);
                 if (!empty($mods['sm_path'])) {
-                    if (file_exists($location . "/" . $mods['sm_path']))
+                    $path = parse_url($mods['sm_path']);
+                    if (!empty($path['scheme'])) return "<script>loadExt('{$mods['sm_path']}')</script>";
+                    if (file_exists($location . "/" . trim($path['path'], "/")))
                         return "<script>loadExt('{$this->getModuleSrc($module)}/{$mods['sm_path']}')</script>";
-                    return "<script>loadExt('{$mods['sm_path']}')</script>";
                 }
 
                 if ($extension == ".sw") {
