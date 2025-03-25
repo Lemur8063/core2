@@ -863,29 +863,47 @@ class Db {
 
     /**
      * Список всех модулей
-     *
      * @return void
      */
     private function getAllModules(): void {
-        $reg      = Registry::getInstance();
-        if ($reg->isRegistered("_modules")) return;
+
+        $reg = Registry::getInstance();
+
+        if ($reg->isRegistered("_modules")) {
+            return;
+        }
+
         $key2 = "all_modules_" . $this->config->database->params->dbname;
+
         //if (1==1) {
-        if (!($this->cache->hasItem($key2))) {
+        if ($this->cache->hasItem($key2)) {
+            $data = $this->cache->getItem($key2);
+        }
+
+        if (empty($data)) {
             require_once(__DIR__ . "/../../mod/admin/Model/Modules.php");
             require_once(__DIR__ . "/../../mod/admin/Model/SubModules.php");
+
             $config = $reg->get('config');
-            if (!$config->database) return;
+            if ( ! $config->database) {
+                return;
+            }
+
             $db = $this->establishConnection($config->database);
-            if (!($db instanceof \Zend_Db_Adapter_Abstract)) return;
+
+            if ( ! ($db instanceof \Zend_Db_Adapter_Abstract)) {
+                return;
+            }
+
             \Zend_Db_Table::setDefaultAdapter($db);
             $reg->set('db|admin', $db);
 
-            $m            = new Model\Modules($db);
-            $sm           = new Model\SubModules($db);
-            $res    = $m->fetchAll($m->select()->order('seq'))->toArray();
-            $sub    = $sm->fetchAll($sm->select()->order('seq'));
-            $data   = [];
+            $m    = new Model\Modules($db);
+            $sm   = new Model\SubModules($db);
+            $res  = $m->fetchAll($m->select()->order('seq'))->toArray();
+            $sub  = $sm->fetchAll($sm->select()->order('seq'));
+            $data = [];
+
             foreach ($res as $val) {
                 unset($val['uninstall']); //чтоб не смущал
                 unset($val['files_hash']); //чтоб не смущал
@@ -898,14 +916,12 @@ class Db {
                 }
                 $data[$val['module_id']] = $val;
             }
-            if ($data) $this->cache->setItem($key2, $data);
-            else {
-                //такого быть не может
+
+            if ($data) {
+                $this->cache->setItem($key2, $data);
             }
-        } else {
-            $data = $this->cache->getItem($key2);
         }
+
         $reg->set("_modules", $data);
     }
-
 }
