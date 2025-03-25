@@ -1004,9 +1004,15 @@ class Db extends Table {
             case self::SEARCH_DATE:
             case self::FILTER_DATE:
                 if ( ! is_array($search_value) || ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[0]))) {
+                    if ( ! is_array($search_value)) {
+                        $search_value = [];
+                    }
                     $search_value[0] = '';
                 }
                 if ( ! is_array($search_value) || ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[1]))) {
+                    if ( ! is_array($search_value)) {
+                        $search_value = [];
+                    }
                     $search_value[1] = '';
                 }
                 break;
@@ -1014,9 +1020,15 @@ class Db extends Table {
             case self::SEARCH_DATETIME:
             case self::FILTER_DATETIME:
                 if ( ! is_array($search_value) || ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[0]))) {
+                    if ( ! is_array($search_value)) {
+                        $search_value = [];
+                    }
                     $search_value[0] = '';
                 }
                 if ( ! is_array($search_value) || ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[1]))) {
+                    if ( ! is_array($search_value)) {
+                        $search_value = [];
+                    }
                     $search_value[1] = '';
                 }
                 break;
