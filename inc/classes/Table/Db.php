@@ -1003,20 +1003,20 @@ class Db extends Table {
         switch ($type) {
             case self::SEARCH_DATE:
             case self::FILTER_DATE:
-                if ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[0])) {
+                if ( ! is_array($search_value) || ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[0]))) {
                     $search_value[0] = '';
                 }
-                if ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[1])) {
+                if ( ! is_array($search_value) || ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}$~', $search_value[1]))) {
                     $search_value[1] = '';
                 }
                 break;
 
             case self::SEARCH_DATETIME:
             case self::FILTER_DATETIME:
-                if ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[0])) {
+                if ( ! is_array($search_value) || ( ! empty($search_value[0]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[0]))) {
                     $search_value[0] = '';
                 }
-                if ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[1])) {
+                if ( ! is_array($search_value) || ( ! empty($search_value[1]) && ! preg_match('~^\d{4}-\d{2}-\d{2}.\d{2}:\d{2}(|:\d{2})$~', $search_value[1]))) {
                     $search_value[1] = '';
                 }
                 break;
