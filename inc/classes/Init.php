@@ -547,6 +547,28 @@ class Init extends Db {
         try {
             $module = $this->route['api'];
             $action = $this->route['action'];
+            if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+                if (!empty($this->route['query'])) {
+                    //возможно это удаление из браузера
+                    if (strpos($this->route['query'], 'mod_') === 0 && strpos($this->route['query'], '.') !== false) {
+                        //удаляют запись из таблицы
+                        $route = $this->route;
+                        $query = explode('=', $route['query']);
+                        $route['params'] = [
+                            '_resource' => key($route['params']),
+                            '_field' => $query[0],
+                            '_value' => $query[1]
+                        ];
+                        $route['query'] = '';
+                        Registry::set('route', $route);
+                        require_once 'core2/mod/admin/ModAdminApi.php';
+                        $coreController = new ModAdminApi();
+                        $out = $coreController->action_index();
+                        if (is_array($out)) $out = json_encode($out);
+                        return $out;
+                    }
+                }
+            }
             $this->setContext($module, $action);
             if ($this->route['api'] == 'admin') {
                 require_once 'core2/mod/admin/ModAdminApi.php';

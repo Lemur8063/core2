@@ -13,7 +13,14 @@ class ModAdminApi extends CommonApi
         $params = $this->route['params'];
         switch ($_SERVER['REQUEST_METHOD']) {
             case 'DELETE':
-                return $this->indexDelete($this->getInputBody());
+                if (isset($params['_resource']) && isset($params['_field']) && isset($params['_value'])) {
+                    //это удаление из UI
+                    if (empty($params['_resource'])) throw new \Exception("Не удалось определить местоположение данных для удаления.");
+                    if (empty($params['_field'])) throw new \Exception("Не удалось определить источник для удаления.");
+                    if (empty($params['_value'])) throw new \Exception("Не удалось определить объекты для удаления.");
+                    return $this->indexDelete($params['_resource'], $params['_field'], explode(",", $params['_value']));
+                }
+                //здесь друдие виды удаления
                 break;
             case 'POST':
                 if (!empty($params['switch'])) {
@@ -52,61 +59,15 @@ class ModAdminApi extends CommonApi
      * @return array|bool|string|void|null
      * @throws Exception
      */
-    #[OAT\Delete(
-        path: '/admin/index/delete/{resource}',
-        operationId: 'deleteRecord',
-        description: 'Удаляет одну или несколько записей ресурса',
-        tags: ['Админ'],
-        parameters: [
-            new OAT\Parameter(
-                name: 'resource',
-                description: 'ижентификатор ресурса, в котором происходит удаление',
-                in: 'path',
-                required: true,
-                schema: new OAT\Schema(type: 'string')
-            )],
-        requestBody: new OAT\RequestBody(
-            required: true, description: 'ключ удаления и id удаляемых записей',
-            content: new OAT\MediaType(
-                mediaType: 'application/x-www-form-urlencoded',
-                schema: new OAT\Schema(
-                    type: 'object',
-                    required: ['key', 'id'],
-                    properties: [
-                        new OAT\Property(property: 'key', type: 'string', title: 'Ключ удаления'),
-                        new OAT\Property(property: 'id', type: 'array', title: 'id записей для удаления',
-                            items: new OAT\Items(type: 'integer')
-                        )
-                    ]
-                )
-            )
-        ),
-        responses: [
-            new OAT\Response(
-                response: 200,
-                description: 'OK',
-            ),
-            new OAT\Response(
-                response: 400,
-                description: 'Ошибка удаления',
-            )
-        ]
-    )]
-    private function indexDelete($data)
+    private function indexDelete($resource, $field, array $values)
     {
-        $params = $this->route['params'];
         try {
-            if (!isset($params['delete'])) throw new RuntimeException("Не удалось определить местоположение данных.");
 
-            if (empty($data['key']) || empty($data['id'])) throw new RuntimeException("Не удалось определить параметры удаления");
-
-            [$table, $refid] = explode(".", $data['key']);
+            [$table, $refid] = explode(".", $field);
 
             if ( ! $table || ! $refid) {
                 throw new RuntimeException("Не удалось определить параметры удаления!");
             }
-            $resource   = $params['delete'];
-            $ids        = $data['id'];
             $admin      = false;
             if (strpos($table, 'core_') === 0) {
                 //удаление в таблицах ядра
@@ -117,7 +78,7 @@ class ModAdminApi extends CommonApi
             if (!$admin) {
 //                $resource = explode('xxx', $resource);
                 //кастомное удаление само должно проверять права на удаление
-                $custom = $this->customDelete($resource, $ids);
+                $custom = $this->customDelete($resource, $values);
                 if ($custom) return $custom;
             }
 
@@ -160,7 +121,7 @@ class ModAdminApi extends CommonApi
 
         $this->db->beginTransaction();
         try {
-            foreach ($ids as $key) {
+            foreach ($values as $key) {
                 $where = array($this->db->quoteInto("`$refid` = ?", $key));
                 if ($authorOnly) {
                     $where[] = $this->db->quoteInto("author = ?", $auth->NAME);
@@ -169,7 +130,7 @@ class ModAdminApi extends CommonApi
                 else $this->db->delete($table, $where);
             }
             $this->db->commit();
-            $this->emit('delete', [$table . "." . $refid => $ids]); //генерируем событие удаления для слушателей
+            $this->emit('delete', [$table . "." . $refid => $values]); //генерируем событие удаления для слушателей
             return true;
         } catch (Exception $e) {
             $this->db->rollBack();
@@ -428,5 +389,5 @@ class ModAdminApi extends CommonApi
         }
         return $res;
     }
-    
+
 }

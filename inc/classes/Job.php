@@ -8,7 +8,7 @@ class Job
     private static $job;
     private static $unique;
 
-    public function __construct($job, $payload = [], $unique = '') {
+    public function __construct($job, $payload = [], $unique = null) {
         self::$job = $job;
         self::$payload = json_encode($payload);
         self::$unique = $unique;
