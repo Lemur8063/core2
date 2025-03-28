@@ -176,7 +176,6 @@ class Mailer
         //convert HTML into a basic plain-text alternative body
         //$mail->msgHTML(file_get_contents('contents.html'), __DIR__);
 
-
         if ( ! empty($this->_config->mail->server)) {
             $mail->isSMTP();
             $mail->Host = $this->_config->mail->server;
@@ -235,7 +234,8 @@ class Mailer
             }
             if (!$isSent) throw new \Exception($mail->ErrorInfo);
 
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             if ( ! empty($workload->payload->queue_id)) {
                 $db = (new Db())->db;
 

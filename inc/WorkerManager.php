@@ -1399,6 +1399,7 @@ class WorkerManager {
                         if (!empty($objects[$function])) { //узнали функцию
                             $unique = '';
                             $payload = trim(substr($body, strlen($function)));
+
                             if (strpos($payload, "{") !== 0) {
                                 //значит есть уникальный id задачи
                                 $unique = substr($payload, 0, strpos($payload, "{"));
@@ -1458,7 +1459,7 @@ class WorkerManager {
                                         $msg;
                                     fwrite($worker, $request);
                                     //echo "Worker FAILED job: $job with exception: $msg \n\n";
-                                    $this->toLog("Worker FAILED job: $job with exception: $msg", self::LOG_LEVEL_WORKER_INFO);
+                                    $this->toLog("Worker FAILED job (extra): $job with exception: $msg", self::LOG_LEVEL_WORKER_INFO);
                                 }
 
                             }

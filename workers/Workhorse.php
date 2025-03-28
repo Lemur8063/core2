@@ -48,6 +48,7 @@ class Workhorse
             $job->sendStatus(0, 100);
 
             $controller = $this->requireController($workload->module, $workload->location);
+            $action     = $workload->worker;
 
             if (!$in_job) {
                 $db->db->insert("core_worker_jobs", [
@@ -55,6 +56,7 @@ class Workhorse
                     'time_start' => (new \DateTime())->format("Y-m-d H:i:s"),
                     'handler' => $job->handle(),
                     'status' => 'start',
+                    'executor' => "$controller->$action",
                 ]);
             }
             $db->db->closeConnection();
@@ -63,7 +65,6 @@ class Workhorse
             $out   = null;
 
             $modWorker = new $controller();
-            $action = $workload->worker;
 
             if (!method_exists($modWorker, $action)) {
                 throw new \Exception("Method does not exists: {$action}", 404);
@@ -72,7 +73,7 @@ class Workhorse
             $job->sendStatus(1, 100);
             //выполнение задачи
             $out = $modWorker->$action($job, $workload->payload);
-
+            unset($modWorker);
             $job->sendStatus(100, 100);
 
             $db = new Db($this->_config);
