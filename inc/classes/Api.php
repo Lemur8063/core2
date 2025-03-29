@@ -2,10 +2,10 @@
 
 namespace Core2;
 
-require_once("JsonException.php");
 require_once("HttpException.php");
 
 use BadMethodCallException;
+use Exception;
 use ModAdminApi;
 
 class Api extends Acl
@@ -28,7 +28,6 @@ class Api extends Acl
 
     /**
      * @return mixed
-     * @throws JsonException
      */
     public function dispatchApi(): mixed {
 
@@ -112,13 +111,13 @@ class Api extends Acl
      * @param $location - путь до файла
      * @param $apiController - название файла контроллера
      *
-     * @throws JsonException
+     * @throws Exception
      */
     private function requireController(string $location, string $apiController): void {
         $controller_path = $location . "/" . $apiController . ".php";
         if (!file_exists($controller_path)) {
             $msg = sprintf($this->translate->tr("Модуль %s не найден"), $apiController);
-            throw new JsonException($msg, 404);
+            throw new Exception($msg, 404);
         }
         $autoload = $location . "/vendor/autoload.php";
         if (file_exists($autoload)) { //подключаем автозагрузку если есть
@@ -127,7 +126,7 @@ class Api extends Acl
         require_once $controller_path; // подлючаем контроллер
         if (!class_exists($apiController)) {
             $msg = sprintf($this->translate->tr("Модуль %s сломан"), $location);
-            throw new JsonException($msg, 500);
+            throw new Exception($msg, 500);
         }
     }
 
@@ -137,7 +136,7 @@ class Api extends Acl
      * @param $module
      * @param $action
      * @return void
-     * @throws JsonException
+     * @throws Exception
      */
     public function checkModule($module, $action): void {
         if ($action == 'index') {
@@ -145,26 +144,26 @@ class Api extends Acl
 
             if ( ! $this->isModuleActive($module)) {
                 $msg = sprintf($this->translate->tr("Модуль %s не существует"), $module);
-                throw new JsonException($msg, 404);
+                throw new Exception($msg, 404);
             }
 
             if (! $this->checkAcl($module)) {
                 $msg = $this->translate->tr("Доступ закрыт!");
-                throw new JsonException($msg, 403);
+                throw new Exception($msg, 403);
             }
         }
         else {
             $submodule_id = $module . '_' . $action;
             if ( ! $this->isModuleActive($submodule_id)) {
                 $msg = sprintf($this->translate->tr("Субмодуль %s не существует"), $action);
-                throw new JsonException($msg, 404);
+                throw new Exception($msg, 404);
             }
             $mods = $this->getSubModule($submodule_id);
 
             //TODO перенести проверку субмодуля в контроллер модуля
             if ($mods['sm_id'] && !$this->checkAcl($submodule_id)) {
                 $msg = $this->translate->tr("Доступ закрыт!");
-                throw new JsonException($msg, 403);
+                throw new Exception($msg, 403);
             }
         }
     }
