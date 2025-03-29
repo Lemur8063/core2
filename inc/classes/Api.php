@@ -73,7 +73,8 @@ class Api extends Acl
 
                     return $out;
                 } else {
-                    throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                    $msg = $this->translate->tr("Метод %s не существует");
+                    throw new BadMethodCallException(sprintf($msg, $action), 404);
                 }
             }
 
@@ -92,7 +93,8 @@ class Api extends Acl
                 }
                 return $out;
             } else {
-                throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
+                $msg = $this->translate->tr("Метод %s не существует");
+                throw new BadMethodCallException(sprintf($msg, $action), 404);
             }
 
         } catch (HttpException $e) {
@@ -115,7 +117,8 @@ class Api extends Acl
     private function requireController(string $location, string $apiController): void {
         $controller_path = $location . "/" . $apiController . ".php";
         if (!file_exists($controller_path)) {
-            throw new JsonException($this->translate->tr("Модуль не найден") . ": " . $apiController, 404);
+            $msg = $this->translate->tr("Модуль %s не найден");
+            throw new JsonException(sprintf($msg, $apiController), 404);
         }
         $autoload = $location . "/vendor/autoload.php";
         if (file_exists($autoload)) { //подключаем автозагрузку если есть
@@ -123,7 +126,8 @@ class Api extends Acl
         }
         require_once $controller_path; // подлючаем контроллер
         if (!class_exists($apiController)) {
-            throw new JsonException($this->translate->tr("Модуль сломан") . ": " . $location, 500);
+            $msg = $this->translate->tr("Модуль %s сломан");
+            throw new JsonException(sprintf($msg, $location), 500);
         }
     }
 
@@ -140,23 +144,27 @@ class Api extends Acl
             $_GET['action'] = "index";
 
             if ( ! $this->isModuleActive($module)) {
-                throw new JsonException(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
+                $msg = $this->translate->tr("Модуль %s не существует");
+                throw new JsonException(sprintf($msg, $module), 404);
             }
 
             if (! $this->checkAcl($module)) {
-                throw new JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $module), 403);
+                $msg = $this->translate->tr("Доступ закрыт!");
+                throw new JsonException(sprintf($msg, $module), 403);
             }
         }
         else {
             $submodule_id = $module . '_' . $action;
             if ( ! $this->isModuleActive($submodule_id)) {
-                throw new JsonException(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
+                $msg = $this->translate->tr("Субмодуль %s не существует");
+                throw new JsonException(sprintf($msg, $action), 404);
             }
             $mods = $this->getSubModule($submodule_id);
 
             //TODO перенести проверку субмодуля в контроллер модуля
             if ($mods['sm_id'] && !$this->checkAcl($submodule_id)) {
-                throw new JsonException(sprintf($this->translate->tr("Доступ закрыт!"), $action), 403);
+                $msg = $this->translate->tr("Доступ закрыт!");
+                throw new JsonException(sprintf($msg, $action), 403);
             }
         }
     }

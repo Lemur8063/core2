@@ -24,10 +24,8 @@ class Router
             }
         }
         reset($temp2);
-        $api = false; //TODO переделать на $this->is_rest
         if (current($temp2) === 'api') {
             unset($temp2[key($temp2)]);
-            $api = true;
         } //TODO do it for SOAP
 
         $route = array(
