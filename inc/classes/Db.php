@@ -42,7 +42,6 @@ class Db {
     /**
      * Db constructor.
      * @param null $config
-     * @throws \Zend_Exception
      */
 	public function __construct($config = null) {
 

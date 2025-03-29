@@ -32,7 +32,6 @@ class Acl extends Db {
 			'delete_default'
 		);
 
-
     /**
      * @throws \Exception
      */
@@ -331,18 +330,20 @@ class Acl extends Db {
 
         $registry = Registry::getInstance();
 
-        if (($xxx = strrpos($source, 'xxx')) > 0) {
-			$source = substr($source, 0, $xxx); //TODO SHOULD BE FIX
-		}
-
-        if (($index = strrpos($source, '_index')) > 0) {
-			$source = substr($source, 0, $index); //TODO SHOULD BE FIX
-		}
-
         $acl  = $registry->get('acl');
+        if (!$acl) return false;
         $auth = $registry->get('auth');
 
-		if ($auth->NAME == 'root' || $auth->ADMIN) {
+        if (($xxx = strrpos($source, 'xxx')) > 0) {
+            $source = substr($source, 0, $xxx); //TODO SHOULD BE FIX
+        }
+
+        if (($index = strrpos($source, '_index')) > 0) {
+            $source = substr($source, 0, $index); //TODO SHOULD BE FIX
+        }
+
+
+        if ($auth->NAME == 'root' || $auth->ADMIN) {
 			return true;
 
 		} elseif (in_array($source, $registry->get('availRes'))) {

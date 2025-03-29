@@ -1,4 +1,5 @@
 <?php
+
 require_once __DIR__ . '/../../inc/classes/CommonApi.php';
 
 use Core2\Error;
