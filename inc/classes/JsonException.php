@@ -15,6 +15,6 @@ class JsonException extends \Exception {
      */
     public function __construct(string $message, int $http_code = 400) {
 
-        parent::__construct($message, $http_code);
+        parent::__construct(htmlspecialchars($message), $http_code);
     }
 }
