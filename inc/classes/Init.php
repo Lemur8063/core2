@@ -338,6 +338,7 @@ class Init extends Db {
         }
 
         if (!empty($this->auth->ID) && !empty($this->auth->NAME) && is_int($this->auth->ID)) {
+
             if (isset($route['module'])) {
                 if (isset($route['api']) && $route['api'] === 'openapi') {
                     if ($route['action'] == 'core2.json') {
@@ -542,8 +543,14 @@ class Init extends Db {
         return '';
     }
 
-    private function dispatchApi() {
+
+    /**
+     * @return mixed
+     */
+    private function dispatchApi(): mixed {
+
         header('Content-type: application/json; charset="utf-8"');
+
         try {
             $module = $this->route['api'];
             $action = $this->route['action'];
@@ -570,13 +577,18 @@ class Init extends Db {
                 }
             }
             $this->setContext($module, $action);
-            if ($this->route['api'] == 'admin') {
+
+            if ($module == 'admin') {
                 require_once 'core2/mod/admin/ModAdminApi.php';
                 $coreController = new ModAdminApi();
-                $action = "action_" . $action;
+                $action         = "action_" . $action;
                 if (method_exists($coreController, $action)) {
                     $out = $coreController->$action();
-                    if (is_array($out)) $out = json_encode($out);
+
+                    if (is_array($out)) {
+                        $out = json_encode($out);
+                    }
+
                     return $out;
                 } else {
                     throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
@@ -585,11 +597,12 @@ class Init extends Db {
 
             $this->checkModule($module, $action);
 
-            $location = $this->getModuleLocation($module);
+            $location      = $this->getModuleLocation($module);
             $modController = "Mod" . ucfirst(strtolower($module)) . "Api";
             $this->requireController($location, $modController);
             $modController = new $modController();
-            $action = "action_" . $action;
+            $action        = "action_" . $action;
+
             if (method_exists($modController, $action)) {
                 $out = $modController->$action();
                 if (is_array($out)) $out = json_encode($out);
@@ -597,10 +610,11 @@ class Init extends Db {
             } else {
                 throw new BadMethodCallException(sprintf($this->translate->tr("Метод %s не существует"), $action), 404);
             }
+
         } catch (HttpException $e) {
             return Error::catchJsonException([
-                'msg' => $e->getMessage(),
-                'code' => $e->getErrorCode()
+                'msg'  => $e->getMessage(),
+                'code' => $e->getErrorCode(),
             ], $e->getCode() ?: 500);
 
         } catch (Exception $e) {
@@ -608,19 +622,24 @@ class Init extends Db {
         }
     }
 
+
     /**
      * проверка модуля на доступность
      * @param $module
      * @param $action
      * @return void
      * @throws \Core2\JsonException
+     * @throws Exception
      */
     private function checkModule($module, $action): void {
         if ($action == 'index') {
             $_GET['action'] = "index";
 
             if ( ! $this->isModuleActive($module)) {
-                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
+                if ( ! empty($this->route['api'])) {
+                    throw new Core2\JsonException(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
+                }
+
                 throw new Exception(sprintf($this->translate->tr("Модуль %s не существует"), $module), 404);
             }
 
@@ -632,7 +651,9 @@ class Init extends Db {
         else {
             $submodule_id = $module . '_' . $action;
             if ( ! $this->isModuleActive($submodule_id)) {
-                if (!empty($this->route['api'])) throw new Core2\JsonException(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
+                if ( ! empty($this->route['api'])) {
+                    throw new Core2\JsonException(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
+                }
                 throw new Exception(sprintf($this->translate->tr("Субмодуль %s не существует"), $action), 404);
             }
             $mods = $this->getSubModule($submodule_id);
@@ -793,7 +814,7 @@ class Init extends Db {
                 $core_config = Registry::get('core_config');
                 if ($core_config->auth && $core_config->auth->scheme == 'basic') {
                     //http basic auth allowed
-                    list($login, $password) = explode(':', base64_decode(substr($_SERVER['HTTP_AUTHORIZATION'], 6)));
+                    [$login, $password] = explode(':', base64_decode(substr($_SERVER['HTTP_AUTHORIZATION'], 6)));
                     $user = $this->dataUsers->getUserByLogin($login);
                     if ($user && $user['u_pass'] === Tool::pass_salt(md5($password))) {
                         $auth = new \StdClass();

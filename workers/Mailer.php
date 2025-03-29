@@ -42,6 +42,9 @@ class Mailer
         $files  = $workload->payload->files; //StdObject
 
         $mail   = new PHPMailer();
+        $mail->CharSet  = "UTF-8";
+        $mail->Encoding = 'base64';
+        //$mail->SMTPDebug = SMTP::DEBUG_SERVER;
 
 
         // DEPRECATED

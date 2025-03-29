@@ -98,6 +98,7 @@ class View extends \Common {
      * @return false|string
      * @throws \Zend_Db_Adapter_Exception
      * @throws \Zend_Exception
+     * @throws \Exception
      */
     public function getEdit(string $app, User $user = null) {
 
@@ -127,7 +128,13 @@ class View extends \Common {
             $about_email = $this->_("Отправить информацию об изменении на email");
         }
 
-        $is_auth_certificate_on = $this->core_config->auth && $this->core_config->auth->x509 && $this->core_config->auth->x509->on;
+
+        $is_auth_certificate_on = false;
+
+        if ($this->isModuleActive('auth')) {
+            $auth_conf = $this->getModuleConfig('auth');
+            $is_auth_certificate_on = $auth_conf?->auth && $auth_conf?->auth?->x509 && $auth_conf?->auth?->x509?->on;
+        }
 
         $is_auth_pass_on = true;
 
@@ -212,17 +219,39 @@ class View extends \Common {
 
 
     /**
-     * @param $cert
+     * @param string $cert
      * @return string
      */
-    private function editCert($cert) {
+    private function editCert(string $cert): string {
+
+        $cert_fio = [];
+
+        if ($cert) {
+            $cert_data = (new Users())->parseCert($cert);
+
+            if ( ! empty($cert_data['lastname'])) {
+                $cert_fio[] = $cert_data['lastname'];
+            }
+            if ( ! empty($cert_data['firstname'])) {
+                $cert_fio[] = $cert_data['firstname'];
+            }
+            if ( ! empty($cert_data['middlename'])) {
+                $cert_fio[] = $cert_data['middlename'];
+            }
+        }
+
+        $cert_fio = implode(' ', $cert_fio);
+
+        if ($cert_fio) {
+            $cert_fio = "({$cert_fio})";
+        }
 
         $html = "
             <br/>
             <textarea style=\"min-width:385px;max-width:385px;min-height: 150px\" name=\"control[certificate_ta]\" placeholder=\"Формат base64\">{$cert}</textarea>
             <br>
             <label class=\"text-muted\">
-                <input type=\"checkbox\" name=\"certificate_parse\" value=\"Y\"> Использовать ФИО из сертификата
+                <input type=\"checkbox\" name=\"certificate_parse\" value=\"Y\"> Использовать ФИО из сертификата {$cert_fio}
             </label>
         ";
 

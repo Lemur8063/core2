@@ -435,6 +435,8 @@ class Email extends Db {
         $config = Registry::get('config');
 
         $mail = new PHPMailer();
+        $mail->CharSet  = "UTF-8";
+        $mail->Encoding = 'base64';
 
         // DEPRECATED
         if (is_array($from)) {
@@ -606,6 +608,8 @@ class Email extends Db {
 
         }
         $mail->setFrom($from_email, $from_name);
+        //$mail->SMTPDebug = SMTP::DEBUG_SERVER;
+
         $isSent = true;
         if (!$mail->send()) {
             //echo 'Mailer Error: ' . $mail->ErrorInfo;

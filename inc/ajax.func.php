@@ -345,7 +345,8 @@ class ajaxFunc extends Common {
 	 * @return int|string
 	 * @throws Exception
 	 */
-	protected function saveData($data, $inTrans = true) {
+	protected function saveData(array $data, bool $inTrans = true) {
+
 		if ( ! $inTrans) {
 		    $this->db->beginTransaction();
         }
@@ -378,7 +379,10 @@ class ajaxFunc extends Common {
 			    throw new Exception("Ошибка обработки таблицы", 500);
             }
 
-			foreach ($data['control'] as $key => $value) {
+
+            $data['control'] = $this->clearData($data['control'], ['trim']);
+
+            foreach ($data['control'] as $key => $value) {
 				if ( ! is_array($value)) $value = trim((string)$value);
 				if (substr($key, -3) == '%re') continue;
 				if (substr($key, -4) == '%tru') continue;
@@ -760,6 +764,26 @@ class ajaxFunc extends Common {
 
 
     /**
+     * Очистка данных
+     * @param array $data
+     * @param array $functions
+     * @return array
+     */
+    protected function clearData(array $data, array $functions = ['trim', 'strip_tags']): array {
+
+        foreach ($functions as $function) {
+            foreach ($data as $key => $item) {
+                if (is_string($item)) {
+                    $data[$key] = $function($item);
+                }
+            }
+        }
+
+        return $data;
+    }
+
+
+    /**
      * Сохранение файлов их XFILES
      * @param string $table - таблица для сохранения
      * @param int    $last_insert_id
@@ -941,12 +965,12 @@ class ajaxFunc extends Common {
 
         if (empty($this->orderFields)) {
             $sess_form = new SessionContainer('Form');
-            if (!$sess_form || !$id || empty($sess_form->$id)) {
-                return array();
+            if ( ! $sess_form || ! $id || empty($sess_form->$id)) {
+                return [];
             }
-            $all_forms = $sess_form->$id;
-            $key   	= $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
-            $this->orderFields = isset($all_forms[$key]) ? $all_forms[$key] : [];
+            $all_forms         = $sess_form->$id;
+            $key               = $this->refid . "_" . crc32($_SERVER['REQUEST_URI']);
+            $this->orderFields = $all_forms[$key] ?? [];
         }
         return $this->orderFields;
     }
